@@ -12,7 +12,8 @@ const Forecast = {
     const days = [...new Set(rows.map(a => a.date))].sort();
     const X = [], Y = [];
     days.forEach(d => hours.forEach(h => { X.push(this.features(d, h, hours)); Y.push(cnt[d + '|' + h] || 0); }));
-    const hasTF = typeof tf !== 'undefined', top = o => [...o].sort((a, b) => b.yhat - a.yhat).slice(0, 3).map(r => r.hour).sort((a, b) => a - b);
+    const isMobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    const hasTF = typeof tf !== 'undefined' && !isMobile, top = o => [...o].sort((a, b) => b.yhat - a.yhat).slice(0, 3).map(r => r.hour).sort((a, b) => a - b);
     let out, engine, loss = null;
     if (hasTF) {
       const scale = Math.max(...Y, 1), xs = tf.tensor2d(X), ys = tf.tensor2d(Y.map(y => [y / scale]));
@@ -21,7 +22,7 @@ const Forecast = {
         tf.layers.dense({ units: 12, activation: 'relu' }),
         tf.layers.dense({ units: 1 })] });
       model.compile({ optimizer: tf.train.adam(0.02), loss: 'meanSquaredError' });
-      const h = await model.fit(xs, ys, { epochs: 80, batchSize: 32, shuffle: true, verbose: 0 });
+      const h = await model.fit(xs, ys, { epochs: 40, batchSize: 32, shuffle: true, verbose: 0, yieldEvery: 'epoch' });
       loss = h.history.loss.at(-1);
       const ft = model.predict(xs), fit = ft.dataSync(), sd = Math.sqrt(Y.reduce((s, y, i) => s + (y - fit[i] * scale) ** 2, 0) / Y.length);
       const xt = tf.tensor2d(hours.map(x => this.features(target, x, hours))), pt = model.predict(xt), pr = pt.dataSync();
@@ -30,7 +31,7 @@ const Forecast = {
     } else {
       const dow = this.features(target, hours[0], hours).slice(hours.length).indexOf(1);
       out = hours.map(hr => { const v = days.filter(d => this.features(d, hr, hours).slice(hours.length).indexOf(1) === dow).map(d => cnt[d + '|' + hr] || 0); return { hour: hr, yhat: +(v.reduce((a, b) => a + b, 0) / (v.length || 1)).toFixed(1), lo: null, hi: null }; });
-      engine = 'Hourly average (fallback: TensorFlow.js could not load, so check your internet connection)';
+      engine = isMobile ? 'Fast mobile hourly forecast' : 'Hourly average (fallback: TensorFlow.js could not load, so check your internet connection)';
     }
     return { engine, date: target, hours: out, peaks: top(out), days_of_history: days.length };
   }

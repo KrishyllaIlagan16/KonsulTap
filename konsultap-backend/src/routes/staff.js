@@ -9,12 +9,13 @@ const { reassignForLeave } = require('../utils/slots');
 const { resendEmail } = require('../utils/mailer');
 const { todaysQueue } = require('../utils/queue');
 
-// ---------- ADMIN ----------
-router.patch('/facilities/:id', requireRole('admin'), wrap(async (req, res) => {
-  const status = (req.body || {}).status;
+// ---------- ADMIN & DOCTOR: update bed / equipment availability ----------
+router.patch('/facilities/:id', requireRole('admin', 'doctor'), wrap(async (req, res) => {
+  const status = (req.body || {}).status, id = Number(req.params.id);
   if (!['available', 'occupied', 'maintenance'].includes(status)) throw new HttpError(400, 'Invalid status.');
-  const r = await q('UPDATE facilities SET status = ? WHERE id = ?', [status, Number(req.params.id)]);
+  const r = await q('UPDATE facilities SET status = ? WHERE id = ?', [status, id]);
   if (!r.affectedRows) throw new HttpError(404, 'Facility not found.');
+  await audit(req, 'update_facility', 'facility', id, status);
   res.json({ ok: true });
 }));
 

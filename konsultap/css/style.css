@@ -50,9 +50,9 @@ th{background:#e8f0ea}.scroll{overflow-x:auto}
 .tag.serving,.tag.available{background:#d3f0de;color:#0d6b3f}.tag.pending,.tag.maintenance{background:#fbe9c4;color:var(--warn)}.tag.occupied,.tag.cancelled{background:#f6d6d2;color:var(--bad)}
 .qcol{background:#fff;border:1px solid var(--line);border-radius:12px;padding:.9rem;grid-column:span 1}
 .qcol h4{margin:0 0 .5rem;font:700 1rem 'Bricolage Grotesque'}
-.qn{display:flex;align-items:center;gap:.6rem;padding:.3rem 0;border-top:1px solid var(--line)}
-.qn b{min-width:2.2rem;height:2.2rem;display:grid;place-items:center;border-radius:8px;background:#e4ece6;font-family:'Bricolage Grotesque'}
-.qn.s b{background:var(--y);color:var(--gd)}
+.qn{display:flex;align-items:center;gap:.6rem;padding:.45rem 0;border-top:1px solid var(--line)}
+.qcol .qn>b{min-width:2.2rem;height:2.2rem;flex:none;display:grid;place-items:center;border-radius:8px;background:#e4ece6;font-family:'Bricolage Grotesque'}
+.qcol .qn.s>b{background:var(--y);color:var(--gd)}
 .fac{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(240px,100%),1fr));gap:.8rem}
 .fcard{background:#fff;border:1px solid var(--line);border-radius:10px;padding:.8rem}
 .dots{display:flex;gap:4px;flex-wrap:wrap;margin:.5rem 0}.dots i{width:14px;height:14px;border-radius:4px;background:var(--ok)}.dots i.occupied{background:var(--bad)}.dots i.maintenance{background:#e0a935}
@@ -108,7 +108,7 @@ details.card summary{cursor:pointer;font-weight:700}
 .live-state.on{background:#d3f0de;color:#0d6b3f}.live-state.off{background:#fbe9c4;color:#8a5a00}
 .board .live-state.on{background:rgba(255,255,255,.15);color:#9be3b5}.board .live-state.off{background:rgba(255,255,255,.15);color:#ffd88a}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.qn.next b{background:#fff3b0;outline:2px solid var(--y)}
+.qn.next>b{background:#fff3b0;outline:2px solid var(--y)}
 .tag.next{background:#fff3b0;color:#6b5a00;border:1px solid var(--y)}
 .sw.next{background:#fff3b0;border:2px solid var(--y)}
 
@@ -203,4 +203,34 @@ td .btn,td select{white-space:nowrap}
 /* ---- large desktop ---- */
 @media (min-width:1600px){
   main{max-width:1320px}
+}
+
+/* ---- mobile tap responsiveness & overall layout alignment polish ---- */
+button,a,input,select,textarea{touch-action:manipulation}
+.dept{height:100%}.dept img{flex:none}
+.cols{align-items:start}
+
+/* My appointments list: prevents reference code from overlapping status badges */
+.appt-item{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:.55rem .8rem;padding:.75rem 0;border-top:1px solid var(--line)}
+.appt-item:first-child{border-top:0;padding-top:.2rem}
+.appt-info{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:.25rem}
+.appt-head{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem .45rem}
+.appt-ref{display:inline-block;padding:.15rem .5rem;border-radius:6px;background:#e4ece6;color:var(--gd);font:800 .92rem 'Bricolage Grotesque',monospace;letter-spacing:.04em}
+.appt-item .actions{align-self:center}
+
+/* Facility cards & interactive Doctor/Admin toolbar */
+.fcard{display:flex;flex-direction:column;gap:.35rem}
+.fcard-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.3rem}
+.fcard-ctrl{margin-top:auto;padding-top:.35rem;display:flex;flex-direction:column;gap:.4rem}
+.fcard-btns{display:flex;flex-wrap:wrap;gap:.35rem}
+.fcard-btns .btn{flex:1 1 auto;text-align:center}
+.fac-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.6rem 1rem;margin-top:0}
+.fac-stats{display:flex;flex-wrap:wrap;gap:.4rem}
+.fac-tools{align-items:center;margin-bottom:.7rem}
+.pill-group{display:flex;flex-wrap:wrap;gap:.35rem}
+.fac-search{flex:1 1 220px;max-width:360px;margin-top:0}
+
+@media (max-width:600px){
+  .appt-item .actions{width:100%;justify-content:flex-start}
+  .fac-search{max-width:none;width:100%}
 }

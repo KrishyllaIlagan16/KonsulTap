@@ -66,6 +66,7 @@ function show(v, sub) {
   ['home', 'login', 'portal', 'book', 'queue', 'privacy', 'forgot', 'reset'].forEach(id => $('#' + id).classList.toggle('hidden', id !== v));
   renderNav(); document.title = `${TITLES[v]} | KonsulTap`;
   if (['home', 'queue'].includes(v)) pollQueue();
+  if (v === 'home' && !$('#hChart').innerHTML) setTimeout(() => { if (view === 'home') drawForecast('h'); }, 150);
   if (v === 'queue') loadPatientFac();
   if (v === 'login') showPortal(sub || 'patient');
   if (v === 'portal') showStaff(sub);
@@ -362,33 +363,71 @@ function renderQueue() {
   }
   $('#stamp').textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
-/** Safety net: with the live connection up we only re-check once a minute; if it is down we poll every 5 s (backing off). */
+/** Safety net: with the live connection up we only re-check once a minute; if it is down (e.g. serverless) we poll every 15 s (backing off) to keep phones responsive. */
 async function pollQueue() {
   clearTimeout(timer);
   if (!['home', 'queue'].includes(view)) return;
   if (!document.hidden) await refreshQueue();
-  timer = setTimeout(pollQueue, Live.isLive() ? 60000 : Math.min(5000 * 2 ** qFails, 60000));
+  timer = setTimeout(pollQueue, Live.isLive() ? 60000 : Math.min(15000 * 2 ** qFails, 60000));
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && ['home', 'queue'].includes(view)) pollQueue(); });
-function facHTML(list, editable) {
+const FAC_LABELS = {
+  staff: { available: 'Available', occupied: 'Occupied', maintenance: 'Maintenance' },
+  doctor: { occupied: 'Reserve / In use', available: 'Release', maintenance: 'Maintenance' }
+};
+function facHTML(list, editable, doctorMode = false) {
   const grp = {}; list.forEach(f => ((grp[f.kind + '|' + f.group_name]) ||= []).push(f));
+  const labels = doctorMode ? FAC_LABELS.doctor : FAC_LABELS.staff;
+  const order = doctorMode ? ['occupied', 'available', 'maintenance'] : ['available', 'occupied', 'maintenance'];
   const mk = kind => Object.entries(grp).filter(([k]) => k.startsWith(kind)).map(([k, l]) => {
     const av = l.filter(x => x.status === 'available').length;
-    return `<div class="fcard"><b>${esc(l[0].group_name)}</b><br><span class="tag ${av ? 'available' : 'occupied'}">${av} of ${l.length} available</span>
+    return `<div class="fcard"><div class="fcard-top"><b>${esc(l[0].group_name)}</b><span class="tag ${av ? 'available' : 'occupied'}">${av} of ${l.length} available</span></div>
       <div class="dots" role="group" aria-label="${esc(l[0].group_name)}: ${av} of ${l.length} available">${l.map(x => `<i class="${x.status}" role="img" aria-label="${esc(x.name)}: ${x.status}" title="${esc(x.name)}: ${x.status}"></i>`).join('')}</div>
-      ${editable ? `<select data-fac="${l[0].group_name}" aria-label="Update ${esc(l[0].group_name)}">${l.map(x => `<option value="${x.id}">${esc(x.name)} (${x.status})</option>`).join('')}</select>
-      <div class="row" style="margin-top:.4rem">${['available', 'occupied', 'maintenance'].map(s => `<button class="btn sm g" data-set="${s}">${s}</button>`).join('')}</div>` : ''}</div>`;
+      ${editable ? `<div class="fcard-ctrl"><select data-fac="${esc(l[0].group_name)}" aria-label="Select unit in ${esc(l[0].group_name)}">${l.map(x => `<option value="${x.id}">${esc(x.name)} (${x.status})</option>`).join('')}</select>
+      <div class="fcard-btns">${order.map(s => `<button type="button" class="btn sm ${s === 'occupied' ? 'r' : s === 'maintenance' ? 'o dark' : 'g'}" data-set="${s}">${labels[s]}</button>`).join('')}</div></div>` : ''}</div>`;
   }).join('');
-  const eq = mk('equipment');   // equipment is staff-only: the patient view never shows this section
-  return legend(LG_FAC, 'Color legend') + `<h3>Rooms &amp; beds</h3><div class="fac">${mk('bed')}</div>` + (eq ? `<h3 style="margin-top:1.2rem">Medical equipment</h3><div class="fac">${eq}</div>` : '');
+  const beds = mk('bed'), eq = mk('equipment');   // equipment is staff-only: the patient view never shows this section
+  const sections = (beds ? `<h3>Rooms &amp; beds</h3><div class="fac">${beds}</div>` : '') + (eq ? `<h3 style="margin-top:1.2rem">Medical equipment</h3><div class="fac">${eq}</div>` : '');
+  return legend(LG_FAC, 'Color legend') + (sections || '<div class="empty">No matching facilities found.</div>');
 }
 async function loadPatientFac() { $('#patientFac').innerHTML = facHTML((await api('/facilities')).filter(f => f.kind === 'bed'), false); }
-async function loadFac(el, editable) {
-  const el$ = $(el); el$.innerHTML = facHTML(await api('/facilities'), editable);
-  if (editable) el$.onclick = async e => {
+async function loadFac(el, editable, doctorMode = false) {
+  const el$ = $(el);
+  if (!el$.innerHTML.trim()) loading(el$, 'Loading facilities...');
+  let all;
+  try { all = await api('/facilities'); } catch (x) { el$.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; return; }
+  const state = el$._facState ||= { filter: 'all', q: '' };
+  const beds = all.filter(f => f.kind === 'bed'), eqs = all.filter(f => f.kind === 'equipment');
+  const bAv = beds.filter(f => f.status === 'available').length, eAv = eqs.filter(f => f.status === 'available').length;
+  const render = () => {
+    let list = all;
+    if (state.filter === 'bed') list = beds;
+    else if (state.filter === 'equipment') list = eqs;
+    else if (state.filter === 'available') list = all.filter(f => f.status === 'available');
+    const q = state.q.trim().toLowerCase();
+    if (q) list = list.filter(f => (f.group_name + ' ' + f.name).toLowerCase().includes(q));
+    el$.querySelector('.fac-body').innerHTML = facHTML(list, editable, doctorMode);
+  };
+  el$.innerHTML = (doctorMode ? `<div class="card inner fac-bar"><div><b>Clinic resource &amp; bed desk</b><br><small class="muted">Check availability and reserve a bed or piece of equipment for a patient. Changes update the live board and are recorded in the audit log.</small></div>
+      <div class="fac-stats"><span class="tag available">${bAv}/${beds.length} beds free</span><span class="tag available">${eAv}/${eqs.length} equipment free</span></div></div>` : '') +
+    `<div class="row fac-tools"><div class="pill-group" role="group" aria-label="Filter facilities">${[['all', 'All'], ['bed', 'Rooms & beds'], ['equipment', 'Equipment'], ['available', 'Available only']].map(([k, lbl]) => `<button type="button" class="btn sm ${state.filter === k ? 'g' : 'o dark'}" data-ff="${k}">${lbl}</button>`).join('')}</div>
+      <input type="search" class="fac-search" placeholder="Search ward or equipment (e.g. ICU, ECG)..." value="${esc(state.q)}" aria-label="Search facilities"></div><div class="fac-body"></div>`;
+  render();
+  el$.querySelector('.fac-search').oninput = e => { state.q = e.target.value; render(); };
+  el$.onclick = async e => {
+    const ff = e.target.closest('[data-ff]');
+    if (ff) { state.filter = ff.dataset.ff; el$.querySelectorAll('[data-ff]').forEach(x => { x.className = 'btn sm ' + (x === ff ? 'g' : 'o dark'); }); render(); return; }
+    if (!editable) return;
     const b = e.target.closest('[data-set]'); if (!b) return;
-    const id = b.closest('.fcard').querySelector('select').value;
-    await api('/facilities/' + id, 'PATCH', { status: b.dataset.set }); toast('Status updated'); loadFac(el, true);
+    const sel = b.closest('.fcard').querySelector('select');
+    const id = sel.value, label = sel.options[sel.selectedIndex]?.textContent.split(' (')[0] || 'Facility';
+    busy(b, async () => {
+      try {
+        await api('/facilities/' + id, 'PATCH', { status: b.dataset.set });
+        toast(`${label} marked ${b.dataset.set}.`);
+        loadFac(el, true, doctorMode);
+      } catch (x) { toast(x.message, 6000); }
+    });
   };
 }
 
@@ -401,7 +440,7 @@ async function init() {
   $('#qDept').innerHTML = '<option value="">Choose a department</option>' + depts.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
   $('#bDate').min = $('#bDate').value = today(); $('#hDate').value = DB.iso(DB.addDays(1));
   $('#qLegend').innerHTML = legend(LG_QUEUE); $('#statusLegend').innerHTML = legend(LG_STATUS, 'Status colors');
-  buildTimes(); loadDocs(); drawForecast('h'); startLive(); setInterval(() => { if (['home', 'queue'].includes(view)) renderQueue(); else if (view === 'book') loadMine(); }, 30000); await route();
+  buildTimes(); loadDocs(); startLive(); setInterval(() => { if (['home', 'queue'].includes(view)) renderQueue(); else if (view === 'book') loadMine(); }, 30000); await route();
 }
 function buildTimes() {
   const sel = $('#bTime'), keep = sel.value, hs = hoursFor($('#bDate').value);
@@ -449,8 +488,8 @@ async function loadMine() {
     const l = await api('/my/appointments'); myIds = new Set(l.map(a => a.id));
     box.innerHTML = l.length ? l.map(a => {
       const live = ['pending', 'confirmed'].includes(a.status) && a.date >= today(), here = a.status === 'confirmed' && a.date === today();
-      return `<div class="qn" style="align-items:flex-start"><span style="flex:1"><b>${esc(a.ref)}</b> ${statusTag(a.status)}${a.checked_in_at ? ' <span class="tag available">Arrived</span>' : ''}<br><small class="muted">${esc(a.dept)} &middot; ${a.date} ${slot(a.time)}${a.doctor ? ' &middot; ' + esc(a.doctor) : ''}${a.cancelled_by === 'system' ? ' &middot; closed automatically' : ''}</small>${estLine(a)}</span>
-        <span class="actions"><button class="btn sm g" data-ref="${esc(a.ref)}">Track</button>${here && !a.checked_in_at ? `<button class="btn sm y" data-checkin="${a.id}">I'm here</button>` : ''}${live ? `<button class="btn sm o dark" data-resched="${a.id}" data-dept="${a.dept_id}" data-ref2="${esc(a.ref)}">Reschedule</button><button class="btn sm r" data-cancel="${a.id}">Cancel</button>` : ''}</span></div>`;
+      return `<div class="appt-item"><div class="appt-info"><div class="appt-head"><strong class="appt-ref">${esc(a.ref)}</strong>${statusTag(a.status)}${a.checked_in_at ? '<span class="tag available">Arrived</span>' : ''}</div><small class="muted">${esc(a.dept)} &middot; ${a.date} ${slot(a.time)}${a.doctor ? ' &middot; ' + esc(a.doctor) : ''}${a.cancelled_by === 'system' ? ' &middot; closed automatically' : ''}</small>${estLine(a)}</div>
+        <div class="actions"><button class="btn sm g" data-ref="${esc(a.ref)}">Track</button>${here && !a.checked_in_at ? `<button class="btn sm y" data-checkin="${a.id}">I'm here</button>` : ''}${live ? `<button class="btn sm o dark" data-resched="${a.id}" data-dept="${a.dept_id}" data-ref2="${esc(a.ref)}">Reschedule</button><button class="btn sm r" data-cancel="${a.id}">Cancel</button>` : ''}</div></div>`;
     }).join('') : '<div class="empty"><p><b>No appointments yet.</b></p><p>Book your first consultation with the form.</p></div>';
   } catch (x) { box.innerHTML = `<p class="msg err">${esc(x.message)} <button class="btn sm g" data-retry="1">Retry</button></p>`; }
 }
@@ -515,13 +554,14 @@ async function docQueue() {
   try {
     const rows = await api('/appointments?doctor=' + ME.ref_id + '&date=' + today());
     const act = rows.filter(r => ['confirmed', 'serving'].includes(r.status)), done = rows.filter(r => r.status === 'done').length, gone = rows.filter(r => ['no_show', 'cancelled'].includes(r.status)).length;
-    $('#dq').innerHTML = legend(LG_STATUS, 'Status colors') + `<p class="muted">${act.length} in line, ${done} finished, ${gone} cancelled or no-show today. Patients are listed by appointment time.</p><div class="scroll"><table><tr><th>Ticket</th><th>Patient</th><th>Time</th><th>Reason</th><th>Status</th><th></th></tr>` +
+    $('#dq').innerHTML = legend(LG_STATUS, 'Status colors') + `<div class="bar" style="margin:0 0 .6rem"><p class="muted" style="margin:0">${act.length} in line, ${done} finished, ${gone} cancelled or no-show today. Patients are listed by appointment time.</p><button type="button" class="btn sm o dark" data-open-fac="1">Reserve bed / equipment</button></div><div class="scroll"><table><tr><th>Ticket</th><th>Patient</th><th>Time</th><th>Reason</th><th>Status</th><th></th></tr>` +
       (act.map(r => `<tr><td><b>${r.queue_no}</b></td><td>${esc(r.patient_name)}</td><td>${slot(r.time)}</td><td>${esc(r.reason)}</td><td>${statusTag(r.status)} ${r.checked_in_at ? '<span class="tag available">Arrived</span>' : '<span class="tag pending">Not arrived</span>'}</td>
       <td class="actions">${r.status === 'serving' ? `<button class="btn sm g" data-st="done" data-id="${r.id}">Finish</button>` : `<button class="btn sm g" data-st="serving" data-id="${r.id}">Call patient</button>${r.checked_in_at ? '' : `<button class="btn sm o dark" data-checkin="${r.id}">Mark arrived</button>`}`}<button class="btn sm r" data-st="no_show" data-id="${r.id}">No-show</button></td></tr>`).join('') || '<tr><td colspan="6"><div class="empty">No patients in line. Newly confirmed patients appear here.</div></td></tr>') + '</table></div>';
   } catch (x) { $('#dq').innerHTML = `<p class="msg err">${esc(x.message)} <button class="btn sm g" data-retry="1">Retry</button></p>`; }
 }
 const dqClick = e => {
   const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.openFac) { $('#doctor .tabs button[data-t="df"]')?.click(); return; }
   if (b.dataset.retry) return docQueue();
   if (b.dataset.st === 'no_show' && !confirm('Mark this patient as a no-show?')) return;
   if (b.dataset.st || b.dataset.checkin) busy(b, async () => {
@@ -884,5 +924,5 @@ async function emails() {
   let l; try { l = await api('/emails'); } catch (x) { $('#ae').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; return; }
   $('#ae').innerHTML = legend(LG_MAIL, 'Email status colors') + (l.map(m => `<div class="card"><b>${esc(m.subject)}</b> <span class="tag ${m.delivered ? 'available' : 'pending'}">${m.delivered ? 'sent to patient' : 'not sent'}</span> <small class="muted">${esc(m.note || '')}</small><br><small class="muted">To ${esc(m.to_addr)} &middot; ${m.sent_at}</small><pre style="white-space:pre-wrap;font:inherit">${esc(m.body)}</pre></div>`).join('')) || '<p class="muted">No emails yet.</p>';
 }
-const tabLoad = { dq: docQueue, df: () => loadFac('#df', false), dr: patientList, ar: requests, am: monitor, af: () => loadFac('#af', true), aa: forecast, ad: doctorsTab, al: leaveTab, au: auditTab, ae: emails };
+const tabLoad = { dq: docQueue, df: () => loadFac('#df', true, true), dr: patientList, ar: requests, am: monitor, af: () => loadFac('#af', true, false), aa: forecast, ad: doctorsTab, al: leaveTab, au: auditTab, ae: emails };
 init();
