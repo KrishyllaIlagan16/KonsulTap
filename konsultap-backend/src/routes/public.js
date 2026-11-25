@@ -44,6 +44,7 @@ router.get('/queue', wrap(async (req, res) => {
 
 // Real-time stream (Server-Sent Events): the browser keeps this open and receives an event whenever a queue changes.
 router.get('/queue/stream', wrap(async (req, res) => {
+  if (process.env.VERCEL) return res.status(204).end();   // Vercel serverless cannot hold persistent SSE streams; frontend falls back to auto-refresh polling
   const ok = await realtime.addClient(req, res);
   if (!ok) res.status(503).json({ error: 'Too many live connections right now. Please try again shortly.' });
 }));

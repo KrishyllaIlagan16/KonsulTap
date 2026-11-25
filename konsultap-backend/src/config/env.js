@@ -6,7 +6,8 @@ const missing = required.filter(k => !process.env[k]);
 if (missing.length) { console.error('Missing environment variables:', missing.join(', ')); process.exit(1); }
 if (process.env.JWT_SECRET.length < 32) { console.error('JWT_SECRET must be at least 32 characters.'); process.exit(1); }
 
-const publicUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || '';
+const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+const publicUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || (vercelUrl ? 'https://' + vercelUrl : '');
 if (process.env.NODE_ENV === 'production' && !publicUrl) { console.error('APP_URL is required in production (the public address of the website, used in password-reset links).'); process.exit(1); }
 
 module.exports = {
@@ -19,7 +20,7 @@ module.exports = {
   tz: process.env.TZ_NAME || 'Asia/Manila',
   cancelCutoffHours: Number(process.env.CANCEL_CUTOFF_HOURS ?? 2),        // patients may cancel/reschedule up to this many hours before
   pendingExpireHours: Number(process.env.PENDING_EXPIRE_HOURS ?? 24),     // unconfirmed bookings are cancelled after this long
-  trustProxy: process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : false,
+  trustProxy: process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) : (process.env.VERCEL ? 1 : false),
   frontendDir: path.resolve(process.env.FRONTEND_DIR || '../konsultap'),
   jwtSecret: process.env.JWT_SECRET,
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
