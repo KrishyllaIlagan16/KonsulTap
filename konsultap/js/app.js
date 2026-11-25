@@ -67,7 +67,6 @@ function show(v, sub) {
   renderNav(); document.title = `${TITLES[v]} | KonsulTap`;
   if (['home', 'queue'].includes(v)) pollQueue();
   if (v === 'home' && !$('#hChart').innerHTML) setTimeout(() => { if (view === 'home') drawForecast('h'); }, 150);
-  if (v === 'queue') loadPatientFac();
   if (v === 'login') showPortal(sub || 'patient');
   if (v === 'portal') showStaff(sub);
   if (v === 'forgot') openForgot(sub);
@@ -390,7 +389,6 @@ function facHTML(list, editable, doctorMode = false) {
   const sections = (beds ? `<h3>Rooms &amp; beds</h3><div class="fac">${beds}</div>` : '') + (eq ? `<h3 style="margin-top:1.2rem">Medical equipment</h3><div class="fac">${eq}</div>` : '');
   return legend(LG_FAC, 'Color legend') + (sections || '<div class="empty">No matching facilities found.</div>');
 }
-async function loadPatientFac() { $('#patientFac').innerHTML = facHTML((await api('/facilities')).filter(f => f.kind === 'bed'), false); }
 async function loadFac(el, editable, doctorMode = false) {
   const el$ = $(el);
   if (!el$.innerHTML.trim()) loading(el$, 'Loading facilities...');
