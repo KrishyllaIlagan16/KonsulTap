@@ -1,0 +1,41 @@
+# Render Blueprint for KonsulTap (Express backend + static frontend in one free Web Service).
+# Connect your GitHub repo in Render -> New -> Blueprint, then fill in the prompted DB_* values from TiDB Cloud.
+services:
+  - type: web
+    name: konsultap
+    runtime: node
+    plan: free
+    rootDir: konsultap-backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: TZ_NAME
+        value: Asia/Manila
+      - key: FRONTEND_DIR
+        value: ../konsultap
+      - key: EMAIL_DNS_CHECK
+        value: "true"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "4000"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASS
+        sync: false
+      - key: DB_NAME
+        value: konsultap
+      - key: DB_SSL
+        value: "true"
+      # Optional: fill these in Render if you want real confirmation / password-reset emails
+      - key: MAIL_USER
+        sync: false
+      - key: MAIL_APP_PASSWORD
+        sync: false

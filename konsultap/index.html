@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KonsulTap | Batangas Medical Center Queue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Public+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<header class="top">
+  <a class="brand" href="#/home"><img src="img/logo.png" alt="Batangas Medical Center logo"><span>KonsulTap</span></a>
+  <nav id="nav" aria-label="Main"></nav>
+</header>
+<main id="main">
+<div id="connBanner" class="banner bad hidden" role="alert"></div>
+<div id="liveAnnounce" class="sr-only" aria-live="polite"></div>
+<!-- HOME -->
+<section id="home" class="view">
+  <div class="hero" style="background-image:linear-gradient(95deg,rgba(6,58,36,.93) 35%,rgba(6,58,36,.35)),url(img/hero.jpg)">
+    <div class="hero-in">
+      <h1>Book from home.<br>Wait where it's comfortable.<br>We'll call your number.</h1>
+      <p>Batangas Medical Center's online queue: pick a department, get a confirmed doctor by email, and watch your place in line move in real time.</p>
+      <div class="row"><button class="btn y" data-view="book">Book a consultation</button><button class="btn o" data-view="queue">See the live queue</button></div>
+    </div>
+    <div class="board" aria-live="polite"><h3>Now serving <span class="live-state off">Connecting...</span></h3><div id="nowServing"></div></div>
+  </div>
+  <h2 class="sec">Best time to visit</h2>
+  <div class="card"><p class="muted">See which hours are usually busiest and pick a quieter time for a shorter wait.</p>
+    <div class="row"><label>Date<input type="date" id="hDate"></label><button class="btn g" id="hBtn">Show busy hours</button></div>
+    <p id="hInfo" class="muted"></p><div id="hChart" class="chart"></div><div class="xl" id="hAx"></div><p id="hPeaks"></p></div>
+  <h2 class="sec">Departments</h2>
+  <div id="deptGrid" class="grid"></div>
+</section>
+
+<!-- BOOK -->
+<section id="book" class="view hidden">
+  <div class="two">
+    <form id="bookForm" class="card">
+      <h2>Book a consultation</h2>
+      <label>Full name<input name="patient_name" required></label>
+      <div class="cols"><label>Email<input name="email" type="email" required></label><label>Mobile<input name="phone" inputmode="tel"></label></div>
+      <label>Department<select name="dept_id" id="bDept" required></select></label>
+      <div class="cols"><label>Date<input name="date" type="date" id="bDate" required></label><label>Time<select name="time" id="bTime" required></select></label></div>
+      <label>Available doctor<select name="doctor_id" id="bDoc" required></select><small id="docHint" class="muted"></small></label>
+      <label>Reason for visit<textarea name="reason" rows="2"></textarea></label>
+      <button class="btn g">Send request</button>
+      <p id="bookMsg" class="msg" role="status"></p>
+      <div id="bookDone" tabindex="-1"></div>
+    </form>
+    <div class="card">
+      <h2>My appointments</h2>
+      <div id="mine"></div>
+      <div id="reschedPanel"></div>
+      <div id="statusLegend"></div>
+      <h3 style="margin-top:1rem">Track a queue</h3>
+      <p class="muted">Enter the reference code from your booking.</p>
+      <div class="row"><input id="refIn" placeholder="KT-XXXX" aria-label="Reference code"><button class="btn g" id="trackBtn">Check</button></div>
+      <div id="trackOut"></div>
+    </div>
+  </div>
+</section>
+
+<!-- LIVE QUEUE + BED VIEWER -->
+<section id="queue" class="view hidden">
+  <h2 class="sec">Live queue today <span class="live-state off" role="status">Connecting...</span> <small id="stamp"></small></h2>
+  <label style="max-width:320px">Department<select id="qDept"></select></label>
+  <div id="qLegend"></div>
+  <p class="muted small">Estimated waits use each doctor's recent average visit time and update by themselves. Real waiting times can vary, so please arrive early and watch for your turn.</p>
+  <div id="leaveBanner"></div>
+  <div id="liveQueue" class="grid"></div>
+  <h2 class="sec">In-patient facility viewer</h2>
+  <div id="patientFac"></div>
+</section>
+
+<!-- PATIENT SIGN IN / SIGN UP (public). Staff sign in lives at the unlisted #/portal/staff-login route. -->
+<section id="login" class="view hidden">
+  <div class="card narrow portal">
+    <h2 id="loginTitle">Patient sign in</h2>
+    <form id="fPatient" class="login" data-role="patient" data-portal="patient">
+      <label>Email<input name="username" type="email" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn g">Sign in as patient</button><p class="msg" role="status"></p>
+      <p class="muted">New here? <a href="#/login/register">Create a patient account</a></p>
+      <p class="muted small"><a href="#/forgot/patient">Forgot your password?</a></p>
+      <div id="gWrap" class="hidden"><p class="muted center">or</p><div id="gBtn"></div><p class="muted small">By continuing with Google you accept the <a href="#/privacy">Privacy Notice</a>.</p></div>
+    </form>
+    <form id="fRegister" class="hidden" data-portal="register">
+      <label>Full name<input name="name" autocomplete="name" maxlength="120" required></label>
+      <label>Email<input name="email" type="email" autocomplete="email" maxlength="190" spellcheck="false" autocapitalize="off" required aria-describedby="emailHint"></label>
+      <p id="emailHint" class="field-hint" aria-live="polite"></p>
+      <label>Password (8+ characters)<input name="password" type="password" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+      <label>Confirm password<input name="confirm" type="password" minlength="8" maxlength="72" autocomplete="new-password" required aria-describedby="confirmHint"></label>
+      <p id="confirmHint" class="field-hint" aria-live="polite"></p>
+      <label class="check"><input type="checkbox" name="consent" required> I have read and accept the <a href="#/privacy" target="_blank" rel="noopener">Privacy Notice</a>.</label>
+      <button class="btn g">Create account</button><p class="msg" role="status"></p>
+      <p class="muted">Already registered? <a href="#/login/patient">Sign in</a></p>
+    </form>
+  </div>
+</section>
+
+<!-- STAFF SIGN IN (unlisted: #/portal/staff-login, #/portal/staff-login/admin). Not linked anywhere in the public UI. -->
+<section id="portal" class="view hidden">
+  <div class="card narrow portal">
+    <h2>Staff sign in</h2>
+    <div class="tabs" id="staffTabs"><button type="button" data-p="doctor">Doctor</button><button type="button" data-p="admin">Administrator</button></div>
+    <form id="fDoctor" class="login" data-role="doctor" data-portal="doctor">
+      <p class="muted">Hospital staff only. Use the Doctor ID given by the hospital.</p>
+      <label>Doctor ID<input name="username" placeholder="e.g. D031" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn g">Sign in as doctor</button><p class="msg" role="status"></p>
+      <p class="muted small"><a href="#/forgot/doctor">Forgot your password?</a></p>
+    </form>
+    <form id="fAdmin" class="login hidden" data-role="admin" data-portal="admin">
+      <p class="muted">Hospital administration only.</p>
+      <label>Username<input name="username" autocomplete="username" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="btn g">Sign in as administrator</button><p class="msg" role="status"></p>
+      <p class="muted small"><a href="#/forgot/admin">Forgot your password?</a></p>
+    </form>
+  </div>
+</section>
+
+<!-- FORGOT / RESET PASSWORD -->
+<section id="forgot" class="view hidden">
+  <form id="fForgot" class="card narrow">
+    <h2>Reset your password</h2>
+    <p class="muted" id="forgotHelp"></p>
+    <label><span id="forgotLabelText">Email</span><input name="identifier" required autocomplete="username" maxlength="190"></label>
+    <button class="btn g">Send reset link</button><p class="msg" role="status"></p>
+    <p class="muted"><a id="forgotBack" href="#/login/patient">Back to sign in</a></p>
+  </form>
+</section>
+<section id="reset" class="view hidden">
+  <div class="card narrow">
+    <h2>Choose a new password</h2>
+    <div id="resetState"></div>
+    <form id="fReset" class="hidden">
+      <label>New password<input type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+      <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+      <p class="muted small">At least 8 characters. Avoid common passwords and your own name or email.</p>
+      <button class="btn g">Save new password</button><p class="msg" role="status"></p>
+    </form>
+  </div>
+</section>
+
+<!-- PRIVACY NOTICE -->
+<section id="privacy" class="view hidden">
+  <div class="card prose">
+    <h2>Privacy Notice</h2>
+    <p class="banner warn"><b>Draft for review.</b> This text must be checked and approved by the hospital's Data Privacy Officer before real use.</p>
+    <h3>What we collect</h3><p>Your name, email, mobile number, the department, doctor, date and time you book, and the reason you give. Doctors record diagnoses and notes in your medical record during your visit.</p>
+    <h3>Why we collect it</h3><p>To book and confirm your consultation, manage the queue, email you your appointment details, and keep your medical record. Booking history without names is used to predict busy hours.</p>
+    <h3>Who can see it</h3><p>Administrators see bookings. A doctor sees the bookings assigned to them and patient records. Every access to patient records is logged. The public queue shows first names only.</p>
+    <h3>How long we keep it</h3><p>[The hospital must state its retention periods here.]</p>
+    <h3>Your rights</h3><p>You may ask to see, correct, or delete your personal data, and to withdraw consent, by contacting the hospital's Data Privacy Officer at [DPO email to be added]. Some medical records must be kept by law.</p>
+    <h3>Security</h3><p>Passwords are stored as hashes, connections should use HTTPS, and staff access is limited by role. No system is perfectly secure; we will notify you and the National Privacy Commission of serious breaches as the law requires.</p>
+  </div>
+</section>
+
+<div id="dyn"></div>
+</main>
+<template id="tpl-doctor"><section id="doctor" class="view">
+  <div class="bar"><h2 id="docName"></h2></div>
+  <details class="card" id="absence"><summary>Report my absence or leave</summary>
+    <form id="absForm"><div class="cols"><label>Date<input type="date" name="date" required></label><label>Reason<input name="reason" maxlength="200" placeholder="e.g. sick leave"></label></div>
+      <button class="btn r">Report absence</button><p class="msg" role="status"></p>
+      <p class="muted">Your booked patients are moved to another doctor in your department when possible, and emailed.</p></form></details>
+  <div class="tabs"><button data-t="dq" class="on">Queue &amp; appointments</button><button data-t="df">Facility checker</button><button data-t="dr">Patient records</button></div>
+  <div id="dq" class="tab"></div>
+  <div id="df" class="tab hidden"></div>
+  <div id="dr" class="tab hidden">
+    <div class="two">
+      <div class="card"><label>Search patients<input id="pSearch" placeholder="Name, phone or patient number"></label><button type="button" class="btn g sm" id="pNew">New patient</button><div id="pList"></div></div>
+      <div class="card" id="chartCard"><div id="chart"><p class="muted">Select a patient to open their chart. Every time you open or change a record it is written to the audit log.</p></div></div>
+    </div>
+  </div>
+</section></template>
+<template id="tpl-admin"><section id="admin" class="view">
+  <div class="bar"><h2>Admin console</h2></div>
+  <div class="tabs"><button data-t="ar" class="on">Requests</button><button data-t="am">Doctor queue monitor</button><button data-t="af">Facilities &amp; equipment</button><button data-t="aa">Peak-hour forecast</button><button data-t="ad">Doctors</button><button data-t="al">Doctor leave</button><button data-t="au">Audit log</button><button data-t="ae">Email outbox</button></div>
+  <div id="ar" class="tab"></div><div id="am" class="tab hidden"></div><div id="af" class="tab hidden"></div>
+  <div id="aa" class="tab hidden">
+    <div class="card"><div class="row"><label>Forecast date<input type="date" id="fDate"></label><button class="btn g" id="fBtn">Run forecast</button></div>
+      <p id="fInfo" class="muted"></p><div id="fChart" class="chart"></div><div class="xl" id="fAx"></div><p id="fPeaks"></p></div>
+  </div>
+  <div id="ad" class="tab hidden"></div><div id="al" class="tab hidden"></div><div id="au" class="tab hidden"></div>
+  <div id="ae" class="tab hidden"></div>
+</section></template>
+<footer>KonsulTap &middot; IT 314 Group 12 &middot; Batangas State University &middot; Demo system, not for real clinical use &middot; <a href="#/privacy">Privacy Notice</a></footer>
+<div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/db.js"></script>
+<script src="js/forecast.js"></script>
+<script src="js/realtime.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
