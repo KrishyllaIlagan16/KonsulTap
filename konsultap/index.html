@@ -3,15 +3,28 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KonsulTap | Batangas Medical Center Queue</title>
+<title>KonsulTap | Online Hospital Queue</title>
+<link rel="icon" type="image/svg+xml" href="img/konsultap-logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Public+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<!-- ANIMATED INTRO SPLASH SCREEN -->
+<div id="splash" class="splash" role="presentation" aria-hidden="true">
+  <div class="splash-inner">
+    <div class="splash-logo-wrap">
+      <span class="splash-ring"></span>
+      <img src="img/konsultap-logo.svg" alt="KonsulTap" class="splash-logo">
+    </div>
+    <div class="splash-brand">Konsul<span>Tap</span></div>
+    <p class="splash-sub">Online Hospital Queue System</p>
+    <div class="splash-bar"><i></i></div>
+  </div>
+</div>
 <a class="skip" href="#main">Skip to main content</a>
 <header class="top">
-  <a class="brand" href="#/home"><img src="img/logo.png" alt="Batangas Medical Center logo"><span>KonsulTap</span></a>
+  <a class="brand" href="#/home"><img src="img/konsultap-logo.svg" alt="KonsulTap logo"><span>KonsulTap</span></a>
   <nav id="nav" aria-label="Main"></nav>
 </header>
 <main id="main">
@@ -76,6 +89,7 @@
 <!-- PATIENT SIGN IN / SIGN UP (public). Staff sign in lives at the unlisted #/portal/staff-login route. -->
 <section id="login" class="view hidden">
   <div class="card narrow portal">
+    <div class="portal-brand"><img src="img/konsultap-logo.svg" alt="KonsulTap logo"><span>KonsulTap</span></div>
     <h2 id="loginTitle">Patient sign in</h2>
     <form id="fPatient" class="login" data-role="patient" data-portal="patient">
       <label>Email<input name="username" type="email" autocomplete="username" required></label>
@@ -102,6 +116,7 @@
 <!-- STAFF SIGN IN (unlisted: #/portal/staff-login, #/portal/staff-login/admin). Not linked anywhere in the public UI. -->
 <section id="portal" class="view hidden">
   <div class="card narrow portal">
+    <div class="portal-brand"><img src="img/konsultap-logo.svg" alt="KonsulTap logo"><span>KonsulTap</span></div>
     <h2>Staff sign in</h2>
     <div class="tabs" id="staffTabs"><button type="button" data-p="doctor">Doctor</button><button type="button" data-p="admin">Administrator</button></div>
     <form id="fDoctor" class="login" data-role="doctor" data-portal="doctor">

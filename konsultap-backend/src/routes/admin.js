@@ -28,8 +28,14 @@ async function upcoming(docId) {
 
 /** Emails a one-time "create your password" link to the doctor's account email. */
 async function sendInvite(docId, req) {
-  const [u] = await q("SELECT id, name, username, email FROM users WHERE role = 'doctor' AND ref_id = ?", [docId]);
-  if (!u) throw new HttpError(404, 'This doctor has no login account.');
+  let [u] = await q("SELECT id, name, username, email FROM users WHERE role = 'doctor' AND ref_id = ?", [docId]);
+  if (!u) {
+    const doc = await docRow(docId);
+    if (!doc) throw new HttpError(404, 'Doctor not found.');
+    const username = 'd' + String(doc.id).padStart(3, '0');
+    await q("INSERT INTO users (role, username, name, ref_id) VALUES ('doctor',?,?,?)", [username, doc.name, doc.id]);
+    [u] = await q("SELECT id, name, username, email FROM users WHERE role = 'doctor' AND ref_id = ?", [docId]);
+  }
   if (!u.email || !EMAIL_RE.test(u.email)) throw new HttpError(400, 'Add an email address for this doctor first.');
   const token = await createToken(u.id, inviteTokenHours * 60, req.ip);
   const m = doctorInviteEmail({ name: u.name, doctorId: u.username.toUpperCase(), link: `${appUrl}/#/reset/${token}`, hours: inviteTokenHours });

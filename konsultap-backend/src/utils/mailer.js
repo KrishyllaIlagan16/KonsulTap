@@ -3,7 +3,7 @@ const { mail } = require('../config/env');
 const { pool } = require('../config/db');
 
 const transport = mail.user && mail.pass
-  ? nodemailer.createTransport({ service: 'gmail', auth: { user: mail.user, pass: mail.pass }, pool: true, maxConnections: 3, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000 })
+  ? nodemailer.createTransport({ service: 'gmail', auth: { user: mail.user, pass: mail.pass }, connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000 })
   : null;
 
 /** Tries to deliver one stored email and records the result. Never throws. */

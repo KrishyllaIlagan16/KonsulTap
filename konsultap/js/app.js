@@ -31,7 +31,7 @@ let depts = [], doctors = [], timer = null, view = 'home', openPatient = null;
 
 /* ---------- routing + role-based access control ---------- */
 let ME = null;
-const ROUTES = { home: null, queue: null, privacy: null, forgot: null, reset: null, login: 'guest', portal: 'guest', book: ['patient'], doctor: ['doctor'], admin: ['admin'], password: ['patient', 'doctor', 'admin'] };
+const ROUTES = { home: null, queue: null, privacy: null, forgot: null, reset: null, login: 'guest', portal: 'guest', book: ['patient'], doctor: ['doctor'], admin: ['admin'], password: ['patient', 'doctor'] };
 const go = r => { location.hash = '#/' + r; };
 const homeFor = u => (u && (u.role === 'doctor' || u.role === 'admin')) ? u.role : 'home';
 /* Staff (doctor/admin) sign in is on an unlisted route that is never linked from public pages. */
@@ -40,7 +40,7 @@ const loginFor = r => isStaff(r) ? 'portal/staff-login/' + r : 'login/patient';
 function renderNav() {
   const L = !ME ? [['home', 'Home'], ['queue', 'Live queue'], ['login/patient', 'Sign in']]
     : ME.role === 'patient' ? [['home', 'Home'], ['book', 'Book'], ['queue', 'Live queue'], ['password', 'Password']]
-    : ME.role === 'doctor' ? [['doctor', 'My clinic'], ['queue', 'Live queue'], ['password', 'Password']] : [['admin', 'Admin console'], ['queue', 'Live queue'], ['password', 'Password']];
+    : ME.role === 'doctor' ? [['doctor', 'My clinic'], ['queue', 'Live queue'], ['password', 'Password']] : [['admin', 'Admin console'], ['queue', 'Live queue']];
   $('#nav').innerHTML = L.map(([r, t]) => `<button data-view="${r}" class="${r.split('/')[0] === view ? 'on' : ''}">${t}</button>`).join('') +
     (ME ? `<span class="who">${esc(ME.name)} <small>${ME.role}</small></span><button id="logoutBtn" class="out">Log out</button>` : '');
 }
@@ -233,27 +233,29 @@ $('#fForgot').onsubmit = e => {
     catch (x) { m.className = 'msg err'; m.textContent = x.message; }
   });
 };
+let resetTok = '';
 async function openReset(tok) {
   const st = $('#resetState'), f = $('#fReset'); f.classList.add('hidden'); $('.msg', f).textContent = '';
-  if (tok) { sessionStorage.kt_reset = tok; history.replaceState(null, '', '#/reset'); }   // keep the secret out of the address bar and browser history
-  const token = sessionStorage.kt_reset;
+  if (tok) { resetTok = tok; try { sessionStorage.kt_reset = tok; } catch {} history.replaceState(null, '', '#/reset'); }   // keep the secret out of the address bar and browser history
+  const token = resetTok || (() => { try { return sessionStorage.kt_reset || ''; } catch { return ''; } })();
   const bad = '<p class="msg err">This reset link is invalid or has expired.</p><p>Request a new link from the sign-in page: <a href="#/forgot/patient">Forgot your password?</a></p>';
   if (!token) { st.innerHTML = bad; return; }
   loading(st, 'Checking your link...');
   try {
     const v = await api('/password/verify?token=' + encodeURIComponent(token));
-    if (!v.valid) { delete sessionStorage.kt_reset; st.innerHTML = bad; return; }
+    if (!v.valid) { resetTok = ''; try { delete sessionStorage.kt_reset; } catch {} st.innerHTML = bad; return; }
     st.innerHTML = ''; f.classList.remove('hidden'); f.password.focus();
   } catch (x) { st.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
 }
 $('#fReset').onsubmit = e => {
   e.preventDefault(); const f = e.target, m = $('.msg', f);
   if (f.password.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The two passwords do not match.'; return; }
+  const token = resetTok || (() => { try { return sessionStorage.kt_reset || ''; } catch { return ''; } })();
   busy(submitBtn(f), async () => {
-    m.className = 'msg';
+    m.className = 'msg'; m.textContent = '';
     try {
-      const r = await api('/password/reset', 'POST', { token: sessionStorage.kt_reset, password: f.password.value });
-      delete sessionStorage.kt_reset; f.reset(); f.classList.add('hidden'); api('/logout', 'POST').catch(() => {});   // clear any old login on this device
+      const r = await api('/password/reset', 'POST', { token, password: f.password.value });
+      resetTok = ''; try { delete sessionStorage.kt_reset; } catch {} f.reset(); f.classList.add('hidden'); api('/logout', 'POST').catch(() => {});   // clear any old login on this device
       $('#resetState').innerHTML = `<p class="msg ok">Your password was changed. You were signed out on all devices.</p><p><a class="btn g" href="#/${esc(loginFor(r.role))}">Sign in</a></p>`;
     } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
   });
@@ -443,7 +445,14 @@ async function loadFac(el, editable, doctorMode = false) {
 }
 
 /* ---------- booking & tracking ---------- */
+function hideSplash() {
+  const s = $('#splash'); if (!s) return;
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const delay = reduced ? 0 : 950;
+  setTimeout(() => { s.classList.add('out'); setTimeout(() => s.remove(), 450); }, delay);
+}
 async function init() {
+  hideSplash();
   await DB.ready();
   [depts, doctors] = await Promise.all([api('/departments'), api('/doctors')]);
   $('#deptGrid').innerHTML = depts.map(d => `<button class="dept" data-dept="${d.id}"><img src="img/depts/${d.icon}" alt="">${esc(d.name)}</button>`).join('');
@@ -490,7 +499,7 @@ function showBooked(r, v) {
   $('#bookDone').innerHTML = `<div class="done-card" role="status">
     <h3 class="no-print">Booking received</h3>
     <div class="print-slip">
-      <div class="slip-title">KonsulTap Appointment Slip</div>
+      <div class="slip-title"><img src="img/konsultap-logo.svg" alt="KonsulTap" class="slip-logo"><span>KonsulTap Appointment Slip</span></div>
       <dl class="slip-grid">
         <dt>Reference Code</dt><dd class="refcode">${esc(r.ref)}</dd>
         <dt>Department</dt><dd>${esc(deptLabel)}</dd>

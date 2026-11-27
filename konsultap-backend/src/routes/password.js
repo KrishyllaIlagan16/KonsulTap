@@ -60,16 +60,25 @@ router.get('/password/verify', resetLimiter, wrap(async (req, res) => {
 router.post('/password/reset', resetLimiter, wrap(async (req, res) => {
   const { token, password } = req.body || {};
   if (!validTokenShape(token)) throw new HttpError(400, 'This reset link is invalid or has expired. Please request a new one.');
+  if (typeof password !== 'string' || !password) throw new HttpError(400, 'Enter a new password.');
   const user = await tx(async c => {
-    const [[r]] = await c.query(`SELECT r.id, r.user_id, u.username, u.email, u.name, u.role FROM password_resets r JOIN users u ON u.id = r.user_id
-      WHERE r.token_hash = ? AND r.used_at IS NULL AND r.expires_at > NOW() FOR UPDATE`, [hashToken(token)]);
-    if (!r) throw new HttpError(400, 'This reset link is invalid or has expired. Please request a new one.');
-    const problem = checkPassword(password, r);
+    const [[pr]] = await c.query(
+      'SELECT id, user_id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW() FOR UPDATE',
+      [hashToken(token)]
+    );
+    if (!pr) throw new HttpError(400, 'This reset link is invalid or has expired. Please request a new one.');
+    const [[u]] = await c.query('SELECT id AS user_id, username, email, name, role FROM users WHERE id = ?', [pr.user_id]);
+    if (!u) throw new HttpError(404, 'Account not found.');
+    const problem = checkPassword(password, u);
     if (problem) throw new HttpError(400, problem);
     const hash = await bcrypt.hash(password, 10);
-    await c.query('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [r.user_id]);
-    await c.query('UPDATE users SET password_hash = ?, password_changed_at = NOW() WHERE id = ?', [hash, r.user_id]);
-    return r;
+    await c.query('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [u.user_id]);
+    const [upd] = await c.query(
+      'UPDATE users SET password_hash = ?, password_changed_at = DATE_SUB(NOW(), INTERVAL 2 SECOND) WHERE id = ?',
+      [hash, u.user_id]
+    );
+    if (!upd.affectedRows) throw new HttpError(500, 'Could not update your password. Please try again.');
+    return u;
   });
   await audit(req, 'password_reset_done', 'user', user.user_id, null, null);
   if (user.email) {
@@ -79,8 +88,8 @@ router.post('/password/reset', resetLimiter, wrap(async (req, res) => {
   res.json({ ok: true, role: user.role });
 }));
 
-// ---- Change Password (for signed-in patient, doctor, or admin) ----
-router.post('/password/change', requireRole('patient', 'doctor', 'admin'), resetLimiter, wrap(async (req, res) => {
+// ---- Change Password (for signed-in patient or doctor; removed from Admin dashboard) ----
+router.post('/password/change', requireRole('patient', 'doctor'), resetLimiter, wrap(async (req, res) => {
   const b = req.body || {};
   const currentPassword = String(b.currentPassword || '');
   const newPassword = String(b.newPassword || '');
