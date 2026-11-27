@@ -38,8 +38,8 @@ router.post('/register', limiter, wrap(async (req, res) => {
   if (b.consent !== true) throw new HttpError(400, 'Please accept the Privacy Notice to create an account.');
   const domain = email.split('@')[1];
   if (emailDnsCheck && !(await domainAcceptsMail(domain))) throw new HttpError(400, `The email domain "${domain}" cannot receive email. Please check your address for typos.`);
-  const [dup] = await q("SELECT id FROM users WHERE role='patient' AND username=?", [email]);
-  if (dup) throw new HttpError(409, 'An account with that email already exists.');
+  const [dup] = await q("SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ? LIMIT 1", [email, email]);
+  if (dup) throw new HttpError(409, 'This email is already registered.');
   const hash = await bcrypt.hash(password, 10);
   const r = (await q("INSERT INTO users (role, username, name, email, password_hash, consent_at) VALUES ('patient',?,?,?,?,NOW())", [email, name, email, hash]));
   const [u] = await q('SELECT * FROM users WHERE id=?', [r.insertId]);

@@ -1,6 +1,7 @@
 /* Admin management of doctors and their schedules. Every route is admin-only and every change is written to the audit log.
    Doctors are never deleted (their history must stay): they are deactivated instead. */
 const router = require('express').Router();
+const bcrypt = require('bcryptjs');
 const { q, tx } = require('../config/db');
 const { tz, appUrl, inviteTokenHours } = require('../config/env');
 const { requireRole } = require('../middleware/auth');
@@ -9,6 +10,7 @@ const { works, nowIn } = require('../utils/logic');
 const { parseSchedule } = require('../utils/schedule');
 const { reassignAppts } = require('../utils/slots');
 const { createToken } = require('../utils/resetTokens');
+const { checkPassword } = require('../utils/password');
 const { doctorInviteEmail } = require('../utils/emailTemplates');
 const { sendMail } = require('../utils/mailer');
 const { audit } = require('../utils/audit');
@@ -50,14 +52,21 @@ router.get('/admin/doctors', admin, wrap(async (req, res) => {
   res.json(rows.map(r => ({ ...shape(r), doctor_code: r.username ? r.username.toUpperCase() : null })));
 }));
 
-// ---- add a doctor: creates the doctor, the login account, and (optionally) emails the "create your password" link ----
+// ---- add a doctor: creates the doctor, the login account (with optional initial password), and (if no password set) optionally emails an invite link ----
 router.post('/admin/doctors', admin, wrap(async (req, res) => {
   const b = req.body || {};
   const name = clean(b.name, 120), room = clean(b.room, 30), email = clean(b.email, 190).toLowerCase(), deptId = Number(b.dept_id);
+  const password = typeof b.password === 'string' ? b.password : '';
   if (name.length < 2 || !room || !deptId) throw new HttpError(400, 'Enter the name, department and room.');
   if (email && !EMAIL_RE.test(email)) throw new HttpError(400, 'Enter a valid email address.');
+  if (password) {
+    if (typeof b.confirm === 'string' && b.confirm !== password) throw new HttpError(400, 'The passwords do not match.');
+    const pwProblem = checkPassword(password, { email, name });
+    if (pwProblem) throw new HttpError(400, pwProblem);
+  }
   const sched = parseSchedule(b);
   if (!(await q('SELECT id FROM departments WHERE id = ?', [deptId])).length) throw new HttpError(400, 'Choose a department.');
+  const hash = password ? await bcrypt.hash(password, 10) : null;
   let created = null;
   for (let i = 0; i < 5 && !created; i++) {                      // new id = highest + 1; retry if two admins add at the same moment
     try {
@@ -65,15 +74,15 @@ router.post('/admin/doctors', admin, wrap(async (req, res) => {
         const [[mx]] = await c.query('SELECT COALESCE(MAX(id), 0) + 1 AS n FROM doctors');
         await c.query('INSERT INTO doctors (id, name, dept_id, room, days, shift, start_hour, end_hour, on_duty) VALUES (?,?,?,?,?,?,?,?,1)', [mx.n, name, deptId, room, sched.days, sched.shift, sched.start_hour, sched.end_hour]);
         const username = 'd' + String(mx.n).padStart(3, '0');
-        await c.query("INSERT INTO users (role, username, name, email, ref_id) VALUES ('doctor',?,?,?,?)", [username, name, email || null, mx.n]);   // no password yet: the doctor sets it from the emailed link
+        await c.query("INSERT INTO users (role, username, name, email, password_hash, ref_id) VALUES ('doctor',?,?,?,?,?)", [username, name, email || null, hash, mx.n]);
         return { id: mx.n, username };
       });
     } catch (e) { if (e.code !== 'ER_DUP_ENTRY') throw e; }
   }
   if (!created) throw new HttpError(500, 'Could not add the doctor. Please try again.');
   await audit(req, 'doctor_create', 'doctor', created.id, name);
-  const invite = email && b.send_invite !== false ? await sendInvite(created.id, req).catch(e => ({ ok: false, note: e.message })) : null;
-  res.status(201).json({ id: created.id, doctor_code: created.username.toUpperCase(), invite });
+  const invite = !hash && email && b.send_invite !== false ? await sendInvite(created.id, req).catch(e => ({ ok: false, note: e.message })) : null;
+  res.status(201).json({ id: created.id, doctor_code: created.username.toUpperCase(), has_password: Boolean(hash), invite });
 }));
 
 // ---- edit details and schedule. If the new schedule leaves booked patients without a doctor, the admin must confirm first. ----

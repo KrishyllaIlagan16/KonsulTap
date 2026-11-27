@@ -144,6 +144,18 @@
   </div>
 </section>
 
+<!-- CHANGE PASSWORD (signed-in users) -->
+<section id="password" class="view hidden">
+  <form id="fChangePw" class="card narrow">
+    <h2>Change password</h2>
+    <p class="muted small">Enter your current password, then choose a new password (8+ characters).</p>
+    <label>Current password<input type="password" name="currentPassword" autocomplete="current-password" required></label>
+    <label>New password<input type="password" name="newPassword" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+    <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+    <button class="btn g">Update password</button><p class="msg" role="status"></p>
+  </form>
+</section>
+
 <!-- PRIVACY NOTICE -->
 <section id="privacy" class="view hidden">
   <div class="card prose">

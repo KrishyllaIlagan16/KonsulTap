@@ -100,7 +100,21 @@ a.btn{text-decoration:none;display:inline-block}
 details.card summary{cursor:pointer;font-weight:700}
 @media (pointer:coarse){.btn.sm,.tabs button,nav button{min-height:44px;padding:.5rem .9rem}input,select,textarea{min-height:44px}}
 @media (max-width:480px){.top{padding:.4rem .6rem}.who{display:none}nav button{padding:.5rem .55rem;font-size:.95rem}.actions{justify-content:flex-start}}
-@media print{.top,nav,.skip,footer,#toast,.tabs{display:none!important}.done-card{border:1px solid #000}}
+.slip-title{font:800 1.05rem 'Bricolage Grotesque',sans-serif;color:var(--gd);margin-bottom:.45rem}
+.slip-grid{display:grid;grid-template-columns:auto 1fr;gap:.3rem 1rem;margin:0 0 .7rem;align-items:baseline}
+.slip-grid dt{font-weight:700;color:var(--mut);font-size:.88rem}
+.slip-grid dd{margin:0;font-weight:600}
+.slip-grid dd.refcode{font-size:1.5rem;line-height:1.1;color:var(--gd)}
+@media print{
+  body{background:#fff}
+  .top,nav,.skip,footer,#toast,.tabs,.no-print,#book .two>.card:last-child,#bookForm>*:not(#bookDone){display:none!important}
+  main{max-width:none;padding:0;margin:0}
+  #book .two{display:block}
+  #bookForm,.done-card{border:0!important;background:#fff!important;padding:0!important;margin:0!important}
+  .print-slip{border:2px solid #000;border-radius:10px;padding:1.25rem;max-width:420px;margin:0 auto}
+  .slip-title{border-bottom:1px solid #000;padding-bottom:.4rem;margin-bottom:.7rem;color:#000}
+  .slip-grid dt{color:#333}
+}
 
 /* ---- real-time live queue ---- */
 .live-state{display:inline-flex;align-items:center;gap:.35rem;font:600 .8rem 'Public Sans',sans-serif;padding:.1rem .55rem;border-radius:99px;vertical-align:middle}

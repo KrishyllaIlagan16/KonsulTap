@@ -15,7 +15,7 @@ const statusTag = st => `<span class="tag ${st}">${esc(String(st).replace('_', '
 const HOURS_ALL = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 const hoursFor = d => HOURS_ALL.filter(h => d !== today() || h > new Date().getHours());
 const timeOpts = hs => hs.length ? hs.map(h => `<option value="${String(h).padStart(2, '0')}:00">${fmtH(h)}</option>`).join('') : '<option value="">No slots left</option>';
-const TITLES = { home: 'Home', queue: 'Live queue', login: 'Sign in', portal: 'Staff sign in', book: 'Book an appointment', doctor: 'My clinic', admin: 'Admin console', privacy: 'Privacy Notice', forgot: 'Reset your password', reset: 'Choose a new password' };
+const TITLES = { home: 'Home', queue: 'Live queue', login: 'Sign in', portal: 'Staff sign in', book: 'Book an appointment', doctor: 'My clinic', admin: 'Admin console', privacy: 'Privacy Notice', forgot: 'Reset your password', reset: 'Choose a new password', password: 'Change password' };
 const fmtH = h => { const n = h % 12 || 12; return n + (h < 12 ? ' AM' : ' PM'); };
 const slot = t => { const [h] = t.split(':').map(Number); return fmtH(h); };
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
@@ -31,7 +31,7 @@ let depts = [], doctors = [], timer = null, view = 'home', openPatient = null;
 
 /* ---------- routing + role-based access control ---------- */
 let ME = null;
-const ROUTES = { home: null, queue: null, privacy: null, forgot: null, reset: null, login: 'guest', portal: 'guest', book: ['patient'], doctor: ['doctor'], admin: ['admin'] };
+const ROUTES = { home: null, queue: null, privacy: null, forgot: null, reset: null, login: 'guest', portal: 'guest', book: ['patient'], doctor: ['doctor'], admin: ['admin'], password: ['patient', 'doctor', 'admin'] };
 const go = r => { location.hash = '#/' + r; };
 const homeFor = u => (u && (u.role === 'doctor' || u.role === 'admin')) ? u.role : 'home';
 /* Staff (doctor/admin) sign in is on an unlisted route that is never linked from public pages. */
@@ -39,8 +39,8 @@ const isStaff = r => r === 'doctor' || r === 'admin';
 const loginFor = r => isStaff(r) ? 'portal/staff-login/' + r : 'login/patient';
 function renderNav() {
   const L = !ME ? [['home', 'Home'], ['queue', 'Live queue'], ['login/patient', 'Sign in']]
-    : ME.role === 'patient' ? [['home', 'Home'], ['book', 'Book'], ['queue', 'Live queue']]
-    : ME.role === 'doctor' ? [['doctor', 'My clinic'], ['queue', 'Live queue']] : [['admin', 'Admin console'], ['queue', 'Live queue']];
+    : ME.role === 'patient' ? [['home', 'Home'], ['book', 'Book'], ['queue', 'Live queue'], ['password', 'Password']]
+    : ME.role === 'doctor' ? [['doctor', 'My clinic'], ['queue', 'Live queue'], ['password', 'Password']] : [['admin', 'Admin console'], ['queue', 'Live queue'], ['password', 'Password']];
   $('#nav').innerHTML = L.map(([r, t]) => `<button data-view="${r}" class="${r.split('/')[0] === view ? 'on' : ''}">${t}</button>`).join('') +
     (ME ? `<span class="who">${esc(ME.name)} <small>${ME.role}</small></span><button id="logoutBtn" class="out">Log out</button>` : '');
 }
@@ -63,7 +63,7 @@ async function route() {
 }
 function show(v, sub) {
   view = v; clearTimeout(timer); $('#dyn').innerHTML = '';
-  ['home', 'login', 'portal', 'book', 'queue', 'privacy', 'forgot', 'reset'].forEach(id => $('#' + id).classList.toggle('hidden', id !== v));
+  ['home', 'login', 'portal', 'book', 'queue', 'privacy', 'forgot', 'reset', 'password'].forEach(id => $('#' + id).classList.toggle('hidden', id !== v));
   renderNav(); document.title = `${TITLES[v]} | KonsulTap`;
   if (['home', 'queue'].includes(v)) pollQueue();
   if (v === 'home' && !$('#hChart').innerHTML) setTimeout(() => { if (view === 'home') drawForecast('h'); }, 150);
@@ -255,6 +255,19 @@ $('#fReset').onsubmit = e => {
       const r = await api('/password/reset', 'POST', { token: sessionStorage.kt_reset, password: f.password.value });
       delete sessionStorage.kt_reset; f.reset(); f.classList.add('hidden'); api('/logout', 'POST').catch(() => {});   // clear any old login on this device
       $('#resetState').innerHTML = `<p class="msg ok">Your password was changed. You were signed out on all devices.</p><p><a class="btn g" href="#/${esc(loginFor(r.role))}">Sign in</a></p>`;
+    } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
+  });
+};
+
+$('#fChangePw').onsubmit = e => {
+  e.preventDefault(); const f = e.target, m = $('.msg', f);
+  if (f.newPassword.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The new passwords do not match.'; f.confirm.focus(); return; }
+  busy(submitBtn(f), async () => {
+    m.className = 'msg'; m.textContent = '';
+    try {
+      const r = await api('/password/change', 'POST', { currentPassword: f.currentPassword.value, newPassword: f.newPassword.value, confirm: f.confirm.value });
+      f.reset(); m.className = 'msg ok'; m.textContent = r.message || 'Your password has been updated.';
+      toast('Password updated.');
     } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
   });
 };
@@ -468,11 +481,26 @@ $('#bookForm').onsubmit = e => {
   });
 };
 function showBooked(r, v) {
-  const [y, mo, d] = v.date.split('-'), hh = v.time.slice(0, 2), end = String(+hh + 1).padStart(2, '0');
-  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//KonsulTap//EN', 'BEGIN:VEVENT', `UID:${r.ref}@konsultap`, `DTSTAMP:${y}${mo}${d}T000000`, `DTSTART:${y}${mo}${d}T${hh}0000`, `DTEND:${y}${mo}${d}T${end}0000`, `SUMMARY:KonsulTap appointment (${r.ref})`, 'LOCATION:Batangas Medical Center', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-  $('#bookDone').innerHTML = `<div class="done-card" role="status"><h3>Booking received</h3><p class="muted">Your reference code</p><p class="refcode">${esc(r.ref)}</p>
-    <p>${r.emailed ? 'A confirmation letter was emailed to ' + esc(v.email) + '.' : 'We could not email you (' + esc(r.note) + '). Please save this code.'} The hospital will now confirm your doctor and queue number.</p>
-    <div class="row"><button type="button" class="btn sm g" data-copy="${esc(r.ref)}">Copy code</button><button type="button" class="btn sm o dark" data-print="1">Print</button><a class="btn sm o dark" download="konsultap-${esc(r.ref)}.ics" href="data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}">Add to calendar</a></div></div>`;
+  const dept = depts.find(d => d.id == v.dept_id);
+  const doc = doctors.find(d => d.id == v.doctor_id);
+  const docLabel = doc ? doc.name : ($('#bDoc').selectedOptions[0]?.textContent.split(' (')[0] || 'Assigned doctor');
+  const roomLabel = doc ? doc.room : ($('#bDoc').selectedOptions[0]?.textContent.match(/\(([^)]+)\)$/)?.[1] || 'TBA');
+  const deptLabel = dept ? dept.name : ($('#bDept').selectedOptions[0]?.textContent || '');
+  const timeLabel = `${v.date} · ${slot(v.time)}`;
+  $('#bookDone').innerHTML = `<div class="done-card" role="status">
+    <h3 class="no-print">Booking received</h3>
+    <div class="print-slip">
+      <div class="slip-title">KonsulTap Appointment Slip</div>
+      <dl class="slip-grid">
+        <dt>Reference Code</dt><dd class="refcode">${esc(r.ref)}</dd>
+        <dt>Department</dt><dd>${esc(deptLabel)}</dd>
+        <dt>Doctor</dt><dd>${esc(docLabel)}</dd>
+        <dt>Room</dt><dd>${esc(roomLabel)}</dd>
+        <dt>Time</dt><dd>${esc(timeLabel)}</dd>
+      </dl>
+    </div>
+    <p class="no-print">${r.emailed ? 'A confirmation letter was emailed to ' + esc(v.email) + '.' : 'We could not email you (' + esc(r.note) + '). Please save this code.'} The hospital will now confirm your doctor and queue number.</p>
+    <div class="row no-print"><button type="button" class="btn sm g" data-copy="${esc(r.ref)}">Copy code</button><button type="button" class="btn sm o dark" data-print="1">Print slip</button></div></div>`;
   $('#bookDone').focus();
 }
 function prefill() { const f = $('#bookForm'); f.patient_name.value = ME.name; f.email.value = ME.email || ''; }
@@ -839,21 +867,29 @@ function docForm(d) {
     <fieldset class="fs"><legend>Working days</legend><div class="chk-row">${DAY_NAMES.map((n, i) => `<label><input type="checkbox" name="day" value="${i}" ${days.has(i) ? 'checked' : ''}> ${n}</label>`).join('')}</div></fieldset>
     <div class="cols"><label>Hours<select name="preset"><option value="full">Full day (7 AM to 5 PM)</option><option value="am">Morning (7 AM to 12 PM)</option><option value="pm">Afternoon (12 PM to 5 PM)</option><option value="custom">Custom hours</option></select></label>
       <div class="cols ${preset === 'custom' ? '' : 'hidden'}" id="customHrs"><label>From<select name="start_hour">${hrs(7, 16, d && d.start_hour != null ? d.start_hour : 8)}</select></label><label>To<select name="end_hour">${hrs(8, 17, d && d.end_hour != null ? d.end_hour : 12)}</select></label></div></div>
-    ${edit ? '<p class="muted small">If the new schedule leaves booked patients without a doctor, you will be asked to confirm and they will be moved or emailed.</p>' : '<label class="check"><input type="checkbox" name="send_invite" checked> Email a link so the doctor can create a password (needs an email)</label>'}
+    ${edit ? '<p class="muted small">If the new schedule leaves booked patients without a doctor, you will be asked to confirm and they will be moved or emailed.</p>'
+      : `<div class="cols"><label>Initial password (8+ characters)<input type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Optional: set login password now"></label><label>Confirm password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Re-enter password"></label></div>
+         <p class="muted small">Set an initial password so the doctor can sign in right away, or leave blank to email a setup link instead.</p>
+         <label class="check"><input type="checkbox" name="send_invite" checked> Email a password setup link if no initial password is set (needs an email)</label>`}
     <div class="row"><button class="btn g">${edit ? 'Save changes' : 'Add doctor'}</button><button type="button" class="btn o dark" data-close="1">Cancel</button></div><p class="msg" role="status"></p></form>`;
   const f = $('#docForm'), m = $('.msg', f); f.preset.value = preset;
+  if (!edit) addPwToggles(f);
   f.preset.onchange = () => $('#customHrs').classList.toggle('hidden', f.preset.value !== 'custom');
   f.querySelector('[data-close]').onclick = () => { box.innerHTML = ''; };
   f.onsubmit = e => {
     e.preventDefault();
+    if (!edit && f.password.value && f.password.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The passwords do not match.'; f.confirm.focus(); return; }
     busy(submitBtn(f), async () => {
       m.className = 'msg'; m.textContent = '';
       const body = { name: f.name.value.trim(), room: f.room.value.trim(), dept_id: +f.dept_id.value, email: f.email.value.trim(), days: [...f.querySelectorAll('[name=day]:checked')].map(x => +x.value) };
       if (f.preset.value === 'custom') { body.start_hour = +f.start_hour.value; body.end_hour = +f.end_hour.value; } else { body.shift = f.preset.value; body.start_hour = null; body.end_hour = null; }
-      if (!edit) body.send_invite = f.send_invite.checked;
+      if (!edit) {
+        body.send_invite = f.send_invite.checked;
+        if (f.password.value) { body.password = f.password.value; body.confirm = f.confirm.value; }
+      }
       try {
         const r = await withConfirm(x => api(edit ? `/admin/doctors/${d.id}` : '/admin/doctors', edit ? 'PUT' : 'POST', { ...body, ...x }));
-        toast(edit ? 'Saved.' + moveNote(r) : `Doctor added. Doctor ID: ${r.doctor_code}.` + (r.invite ? (r.invite.ok ? ' Password link emailed.' : ' Password link not sent: ' + r.invite.note) : ' Add an email and send the password link so they can sign in.'), 9000);
+        toast(edit ? 'Saved.' + moveNote(r) : `Doctor added. Doctor ID: ${r.doctor_code}.` + (r.has_password ? ' Initial password set — ready to sign in.' : r.invite ? (r.invite.ok ? ' Password link emailed.' : ' Password link not sent: ' + r.invite.note) : ' Add an email and send the password link so they can sign in.'), 9000);
         box.innerHTML = ''; await refreshDoctorsCache(); loadDocList();
       } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
     });
