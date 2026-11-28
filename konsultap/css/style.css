@@ -93,6 +93,8 @@ main:focus{outline:none}
 .tag.no_show{background:#f6d6d2;color:var(--bad)}.tag.done{background:#e4ece6}
 a.btn{text-decoration:none;display:inline-block}
 .actions{display:flex;gap:.35rem;flex-wrap:wrap;justify-content:flex-end}
+td.actions{display:table-cell;vertical-align:middle;white-space:nowrap}
+.act-wrap{display:flex;gap:.35rem;flex-wrap:nowrap;justify-content:flex-end;align-items:center}
 .done-card{border:2px solid var(--g);background:#eef7f1;border-radius:12px;padding:1rem;margin-top:1rem}.refcode{font:800 2rem 'Bricolage Grotesque',monospace;letter-spacing:.12em;margin:.2rem 0}
 .card.inner{background:#f7faf8;margin-top:.8rem}
 .check{display:flex;gap:.5rem;align-items:flex-start;font-weight:400}.check input{width:auto;margin:.25rem 0 0}
