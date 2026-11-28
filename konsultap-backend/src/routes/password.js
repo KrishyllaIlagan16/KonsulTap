@@ -72,10 +72,11 @@ router.post('/password/reset', resetLimiter, wrap(async (req, res) => {
     const problem = checkPassword(password, u);
     if (problem) throw new HttpError(400, problem);
     const hash = await bcrypt.hash(password, 10);
+    const changedSec = Math.floor(Date.now() / 1000) - 2;   // UTC epoch matching JWT iat, avoids TiDB/Node timezone skew
     await c.query('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [u.user_id]);
     const [upd] = await c.query(
-      'UPDATE users SET password_hash = ?, password_changed_at = DATE_SUB(NOW(), INTERVAL 2 SECOND) WHERE id = ?',
-      [hash, u.user_id]
+      'UPDATE users SET password_hash = ?, password_changed_at = FROM_UNIXTIME(?) WHERE id = ?',
+      [hash, changedSec, u.user_id]
     );
     if (!upd.affectedRows) throw new HttpError(500, 'Could not update your password. Please try again.');
     return u;
@@ -108,8 +109,9 @@ router.post('/password/change', requireRole('patient', 'doctor'), resetLimiter, 
   if (problem) throw new HttpError(400, problem);
 
   const hash = await bcrypt.hash(newPassword, 10);
-  // Set password_changed_at 1 second in the past so the fresh token issued below (iat = now) is always accepted
-  await q('UPDATE users SET password_hash = ?, password_changed_at = DATE_SUB(NOW(), INTERVAL 1 SECOND) WHERE id = ?', [hash, u.id]);
+  const changedSec = Math.floor(Date.now() / 1000) - 2;   // UTC epoch matching JWT iat, so the fresh token below is always valid
+  const upd = await q('UPDATE users SET password_hash = ?, password_changed_at = FROM_UNIXTIME(?) WHERE id = ?', [hash, changedSec, u.id]);
+  if (!upd.affectedRows) throw new HttpError(500, 'Could not update your password. Please try again.');
   await audit(req, 'password_changed', 'user', u.id, u.role);
   if (u.email) {
     const m = passwordChangedEmail({ name: u.name });

@@ -58,21 +58,20 @@ router.get('/admin/doctors', admin, wrap(async (req, res) => {
   res.json(rows.map(r => ({ ...shape(r), doctor_code: r.username ? r.username.toUpperCase() : null })));
 }));
 
-// ---- add a doctor: creates the doctor, the login account (with optional initial password), and (if no password set) optionally emails an invite link ----
+// ---- add a doctor: creates the doctor and login account with required initial password (email is optional) ----
 router.post('/admin/doctors', admin, wrap(async (req, res) => {
   const b = req.body || {};
   const name = clean(b.name, 120), room = clean(b.room, 30), email = clean(b.email, 190).toLowerCase(), deptId = Number(b.dept_id);
   const password = typeof b.password === 'string' ? b.password : '';
   if (name.length < 2 || !room || !deptId) throw new HttpError(400, 'Enter the name, department and room.');
   if (email && !EMAIL_RE.test(email)) throw new HttpError(400, 'Enter a valid email address.');
-  if (password) {
-    if (typeof b.confirm === 'string' && b.confirm !== password) throw new HttpError(400, 'The passwords do not match.');
-    const pwProblem = checkPassword(password, { email, name });
-    if (pwProblem) throw new HttpError(400, pwProblem);
-  }
+  if (!password) throw new HttpError(400, 'Set an initial password for the doctor (at least 8 characters).');
+  if (typeof b.confirm === 'string' && b.confirm !== password) throw new HttpError(400, 'The passwords do not match.');
+  const pwProblem = checkPassword(password, { email, name });
+  if (pwProblem) throw new HttpError(400, pwProblem);
   const sched = parseSchedule(b);
   if (!(await q('SELECT id FROM departments WHERE id = ?', [deptId])).length) throw new HttpError(400, 'Choose a department.');
-  const hash = password ? await bcrypt.hash(password, 10) : null;
+  const hash = await bcrypt.hash(password, 10);
   let created = null;
   for (let i = 0; i < 5 && !created; i++) {                      // new id = highest + 1; retry if two admins add at the same moment
     try {
@@ -87,8 +86,7 @@ router.post('/admin/doctors', admin, wrap(async (req, res) => {
   }
   if (!created) throw new HttpError(500, 'Could not add the doctor. Please try again.');
   await audit(req, 'doctor_create', 'doctor', created.id, name);
-  const invite = !hash && email && b.send_invite !== false ? await sendInvite(created.id, req).catch(e => ({ ok: false, note: e.message })) : null;
-  res.status(201).json({ id: created.id, doctor_code: created.username.toUpperCase(), has_password: Boolean(hash), invite });
+  res.status(201).json({ id: created.id, doctor_code: created.username.toUpperCase(), has_password: true });
 }));
 
 // ---- edit details and schedule. If the new schedule leaves booked patients without a doctor, the admin must confirm first. ----
@@ -144,6 +142,34 @@ router.post('/admin/doctors/:id/active', admin, wrap(async (req, res) => {
 router.post('/admin/doctors/:id/invite', admin, wrap(async (req, res) => {
   if (!(await docRow(Number(req.params.id)))) throw new HttpError(404, 'Doctor not found.');
   res.json(await sendInvite(Number(req.params.id), req));
+}));
+
+// ---- admin accounts: list and create additional administrator accounts ----
+router.get('/admin/admins', admin, wrap(async (req, res) => {
+  res.json(await q("SELECT id, username, name, email, active, last_login, created_at FROM users WHERE role = 'admin' ORDER BY id"));
+}));
+
+router.post('/admin/admins', admin, wrap(async (req, res) => {
+  const b = req.body || {};
+  const name = clean(b.name, 120), username = clean(b.username, 40).toLowerCase(), email = clean(b.email, 190).toLowerCase();
+  const password = typeof b.password === 'string' ? b.password : '';
+  if (name.length < 2 || !/^[a-z0-9._-]{3,40}$/.test(username)) throw new HttpError(400, 'Enter a full name and a username (3–40 letters, numbers, dots, hyphens or underscores).');
+  if (email && !EMAIL_RE.test(email)) throw new HttpError(400, 'Enter a valid email address.');
+  if (!password) throw new HttpError(400, 'Enter a password (at least 8 characters).');
+  if (typeof b.confirm === 'string' && b.confirm !== password) throw new HttpError(400, 'The passwords do not match.');
+  const pwProblem = checkPassword(password, { username, email, name });
+  if (pwProblem) throw new HttpError(400, pwProblem);
+
+  const [dupUser] = await q('SELECT id FROM users WHERE LOWER(username) = ? LIMIT 1', [username]);
+  if (dupUser) throw new HttpError(409, 'That username is already taken.');
+  if (email) {
+    const [dupEmail] = await q('SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1', [email]);
+    if (dupEmail) throw new HttpError(409, 'This email is already registered.');
+  }
+  const hash = await bcrypt.hash(password, 10);
+  const r = await q("INSERT INTO users (role, username, name, email, password_hash) VALUES ('admin',?,?,?,?)", [username, name, email || null, hash]);
+  await audit(req, 'admin_create', 'user', r.insertId, username);
+  res.status(201).json({ id: r.insertId, username, name, email: email || null });
 }));
 
 module.exports = router;

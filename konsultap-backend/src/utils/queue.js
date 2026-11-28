@@ -11,11 +11,12 @@ const COLS = `a.id, a.status, a.queue_no, a.doctor_id, a.patient_name, a.appt_ti
 
 /** Confirmed + now-serving patients for today, ordered per doctor by appointment time. Optionally only some doctors. */
 async function todaysQueue(doctorIds = null) {
-  const params = [nowIn(tz).date];
+  const todayStr = nowIn(tz).date, params = [todayStr, todayStr];
   let extra = '';
   if (doctorIds && doctorIds.length) { extra = ' AND a.doctor_id IN (?)'; params.push(doctorIds); }
   const rows = await q(`SELECT ${COLS} FROM appointments a JOIN doctors d ON d.id = a.doctor_id JOIN departments p ON p.id = a.dept_id
-    WHERE a.appt_date = ? AND a.status IN ('confirmed','serving')${extra} ORDER BY a.doctor_id, a.appt_time, a.queue_no`, params);
+    WHERE a.appt_date = ? AND a.status IN ('confirmed','serving') AND a.doctor_id NOT IN (SELECT doctor_id FROM doctor_leave WHERE leave_date = ?)${extra}
+    ORDER BY a.doctor_id, a.appt_time, a.queue_no`, params);
   const n = nowIn(tz);
   return attachEstimates(markNext(rows), await getStats(), { minuteOfDay: n.hour * 60 + n.minute, ts: Date.now() });   // wait-time estimates
 }

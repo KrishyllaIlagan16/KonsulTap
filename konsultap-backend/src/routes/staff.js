@@ -19,17 +19,37 @@ router.patch('/facilities/:id', requireRole('admin', 'doctor'), wrap(async (req,
   res.json({ ok: true });
 }));
 
-// ---------- DOCTOR LEAVE (admin for anyone; a doctor for themself) ----------
+// ---------- DOCTOR LEAVE (admin for anyone; a doctor for themself; 1-5 days only, reason required, no past dates) ----------
 router.post('/doctors/:id/leave', requireRole('admin', 'doctor'), wrap(async (req, res) => {
-  const id = Number(req.params.id), b = req.body || {}, date = b.date || nowIn(tz).date;
+  const id = Number(req.params.id), b = req.body || {}, todayStr = nowIn(tz).date;
+  const start = b.start_date || b.date || todayStr;
+  const end = b.end_date || start;
+  const reason = clean(b.reason, 200);
   if (req.user.role === 'doctor' && req.user.ref_id !== id) throw new HttpError(403, 'Access denied: you can only report your own absence.');
-  if (!isDate(date) || date < nowIn(tz).date) throw new HttpError(400, 'Choose today or a later date.');
+  if (!reason) throw new HttpError(400, 'Please enter a reason for your leave.');
+  if (!isDate(start) || !isDate(end)) throw new HttpError(400, 'Enter valid leave dates.');
+  if (start < todayStr) throw new HttpError(400, 'Cannot file leave for a past date. Choose today or a future date.');
+  if (end < start) throw new HttpError(400, 'End date cannot be earlier than the start date.');
+  const startMs = Date.parse(start + 'T00:00:00Z'), endMs = Date.parse(end + 'T00:00:00Z');
+  const dayCount = Math.round((endMs - startMs) / 86400000) + 1;
+  if (dayCount < 1 || dayCount > 5) throw new HttpError(400, 'Leave can only be filed for 1 to 5 days at a time.');
   const [doc] = await q('SELECT id FROM doctors WHERE id = ?', [id]);
   if (!doc) throw new HttpError(404, 'Doctor not found.');
-  try { await q('INSERT INTO doctor_leave (doctor_id, leave_date, reason, created_by) VALUES (?,?,?,?)', [id, date, clean(b.reason, 200), req.user.id]); }
-  catch (e) { if (e.code === 'ER_DUP_ENTRY') throw new HttpError(409, 'That leave is already recorded.'); throw e; }
-  await audit(req, 'doctor_leave', 'doctor', id, date);
-  res.status(201).json({ ok: true, ...(await reassignForLeave(id, date)) });
+
+  const dates = Array.from({ length: dayCount }, (_, i) => new Date(startMs + i * 86400000).toISOString().slice(0, 10));
+  const added = [];
+  for (const d of dates) {
+    try { await q('INSERT INTO doctor_leave (doctor_id, leave_date, reason, created_by) VALUES (?,?,?,?)', [id, d, reason, req.user.id]); added.push(d); }
+    catch (e) { if (e.code !== 'ER_DUP_ENTRY') throw e; }
+  }
+  if (!added.length) throw new HttpError(409, 'Leave is already recorded for the selected date(s).');
+  await audit(req, 'doctor_leave', 'doctor', id, added.length === 1 ? added[0] : `${added[0]} to ${added[added.length - 1]}`);
+  let total = 0, moved = 0, unassigned = 0;
+  for (const d of added) {
+    const r = await reassignForLeave(id, d);
+    total += r.total || 0; moved += r.moved || 0; unassigned += r.unassigned || 0;
+  }
+  res.status(201).json({ ok: true, days: added.length, dates: added, total, moved, unassigned });
 }));
 
 router.get('/leave', requireRole('admin'), wrap(async (req, res) => {

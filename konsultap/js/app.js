@@ -54,13 +54,15 @@ async function route() {
   let v = Object.hasOwn(ROUTES, name) ? name : 'home';
   if (v === 'portal' && parts[2] !== 'staff-login') v = 'home';            // only the exact staff URL works
   const rule = ROUTES[v], sub = v === 'portal' ? parts[3] : parts[2];
-  if ((v === 'login' || v === 'portal') && ME) return go(homeFor(ME));
+  if ((v === 'login' || v === 'portal') && ME) { history.replaceState(null, '', '#/' + homeFor(ME)); return show(homeFor(ME)); }
+  // Signed-in doctors and admins stay on their own portal (prevents browser Back from landing on patient Home/Book)
+  if (ME && isStaff(ME.role) && ['home', 'book'].includes(v)) { history.replaceState(null, '', '#/' + homeFor(ME)); return show(homeFor(ME)); }
   if (Array.isArray(rule) && !(ME && rule.includes(ME.role))) {
     if (!ME) {
       if (v === 'book') { sessionStorage.next = v; toast('Please sign in to continue.'); return go('login/patient'); }
       return go('home');                                                    // staff pages: never reveal where the staff login is
     }
-    toast(`Access denied: ${ME.role} accounts cannot open that page.`); return go(homeFor(ME));
+    toast(`Access denied: ${ME.role} accounts cannot open that page.`); history.replaceState(null, '', '#/' + homeFor(ME)); return show(homeFor(ME));
   }
   show(v, sub);
 }
@@ -117,7 +119,8 @@ async function afterLogin(r) {
   ME = r.user; meLoaded = true;
   if (ME.role === 'patient') api('/my/appointments').then(l => { myIds = new Set(l.map(a => a.id)); }).catch(() => {}); else myIds = new Set();
   toast('Welcome, ' + r.user.name); const nx = sessionStorage.next; delete sessionStorage.next;
-  go(r.user.role === 'patient' ? (nx === 'book' ? 'book' : 'home') : r.user.role); route();
+  const dest = r.user.role === 'patient' ? (nx === 'book' ? 'book' : 'home') : r.user.role;
+  history.replaceState(null, '', '#/' + dest); route();
 }
 $$('form.login').forEach(f => f.onsubmit = e => {
   e.preventDefault(); const m = $('.msg', f);
@@ -541,9 +544,9 @@ async function loadMine() {
   try {
     const l = await api('/my/appointments'); myIds = new Set(l.map(a => a.id));
     box.innerHTML = l.length ? l.map(a => {
-      const live = ['pending', 'confirmed'].includes(a.status) && a.date >= today(), here = a.status === 'confirmed' && a.date === today();
+      const live = ['pending', 'confirmed'].includes(a.status) && a.date >= today(), here = a.status === 'confirmed' && a.date === today(), trackable = ['pending', 'confirmed', 'serving'].includes(a.status);
       return `<div class="appt-item"><div class="appt-info"><div class="appt-head"><strong class="appt-ref">${esc(a.ref)}</strong>${statusTag(a.status)}${a.checked_in_at ? '<span class="tag available">Arrived</span>' : ''}</div><small class="muted">${esc(a.dept)} &middot; ${a.date} ${slot(a.time)}${a.doctor ? ' &middot; ' + esc(a.doctor) : ''}${a.cancelled_by === 'system' ? ' &middot; closed automatically' : ''}</small>${estLine(a)}</div>
-        <div class="actions"><button class="btn sm g" data-ref="${esc(a.ref)}">Track</button>${here && !a.checked_in_at ? `<button class="btn sm y" data-checkin="${a.id}">I'm here</button>` : ''}${live ? `<button class="btn sm o dark" data-resched="${a.id}" data-dept="${a.dept_id}" data-ref2="${esc(a.ref)}">Reschedule</button><button class="btn sm r" data-cancel="${a.id}">Cancel</button>` : ''}</div></div>`;
+        <div class="actions">${trackable ? `<button class="btn sm g" data-ref="${esc(a.ref)}">Track</button>` : ''}${here && !a.checked_in_at ? `<button class="btn sm y" data-checkin="${a.id}">I'm here</button>` : ''}${live ? `<button class="btn sm o dark" data-resched="${a.id}" data-dept="${a.dept_id}" data-ref2="${esc(a.ref)}">Reschedule</button><button class="btn sm r" data-cancel="${a.id}">Cancel</button>` : ''}</div></div>`;
     }).join('') : '<div class="empty"><p><b>No appointments yet.</b></p><p>Book your first consultation with the form.</p></div>';
   } catch (x) { box.innerHTML = `<p class="msg err">${esc(x.message)} <button class="btn sm g" data-retry="1">Retry</button></p>`; }
 }
@@ -591,14 +594,34 @@ function mountDoctor() {
   const d = doctors.find(x => x.id == ME.ref_id);
   $('#docName').textContent = d ? `${d.name} - ${d.dept} (${d.room})` : ME.name;
   bindTabs($('#dyn')); $('#dq').onclick = dqClick; let pst; $('#pSearch').oninput = () => { clearTimeout(pst); pst = setTimeout(patientList, 350); }; $('#pList').onclick = pListClick; $('#pNew').onclick = () => profileForm(null);
-  const ab = $('#absForm'); ab.date.min = ab.date.value = today();
+  const ab = $('#absForm');
+  const syncLeaveBounds = f => {
+    const t = today();
+    f.start_date.min = t;
+    if (!f.start_date.value || f.start_date.value < t) f.start_date.value = t;
+    const s = f.start_date.value;
+    const maxEnd = DB.iso(DB.addDays(4, new Date(s + 'T00:00:00')));   // 1 to 5 days inclusive
+    f.end_date.min = s; f.end_date.max = maxEnd;
+    if (!f.end_date.value || f.end_date.value < s) f.end_date.value = s;
+    else if (f.end_date.value > maxEnd) f.end_date.value = maxEnd;
+  };
+  syncLeaveBounds(ab);
+  ab.start_date.onchange = () => syncLeaveBounds(ab);
   ab.onsubmit = e => {
     e.preventDefault(); const m = $('.msg', ab);
-    if (!confirm('Report your absence? Your booked patients will be moved to another doctor or contacted by email.')) return;
+    m.className = 'msg'; m.textContent = '';
+    const start = ab.start_date.value, end = ab.end_date.value, reason = ab.reason.value.trim();
+    if (!reason) { m.className = 'msg err'; m.textContent = 'Please enter a reason for your leave.'; ab.reason.focus(); return; }
+    if (start < today()) { m.className = 'msg err'; m.textContent = 'Cannot file leave for a past date.'; ab.start_date.focus(); return; }
+    const days = Math.round((Date.parse(end + 'T00:00:00Z') - Date.parse(start + 'T00:00:00Z')) / 86400000) + 1;
+    if (days < 1 || days > 5) { m.className = 'msg err'; m.textContent = 'Leave can only be filed for 1 to 5 days at a time.'; ab.end_date.focus(); return; }
+    if (!confirm(`File ${days}-day leave (${start}${days > 1 ? ' to ' + end : ''})? Your booked patients will be moved to another doctor or contacted by email.`)) return;
     busy(submitBtn(ab), async () => {
-      m.className = 'msg';
-      try { const r = await api(`/doctors/${ME.ref_id}/leave`, 'POST', { date: ab.date.value, reason: ab.reason.value }); m.className = 'msg ok'; m.textContent = `Recorded. ${r.total} appointment(s): ${r.moved} moved to colleagues, ${r.unassigned} need rescheduling. Patients were emailed.`; docQueue(); }
-      catch (x) { m.className = 'msg err'; m.textContent = x.message; }
+      try {
+        const r = await api(`/doctors/${ME.ref_id}/leave`, 'POST', { start_date: start, end_date: end, reason });
+        m.className = 'msg ok'; m.textContent = `Leave recorded (${r.days} day${r.days > 1 ? 's' : ''}). ${r.total} appointment(s): ${r.moved} moved to colleagues, ${r.unassigned} need rescheduling. Patients were emailed.`;
+        ab.reason.value = ''; docQueue();
+      } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
     });
   };
   tabLoad.dq();
@@ -812,7 +835,7 @@ const arClick = e => {
   busy(b, async () => {
     try {
       if (b.dataset.ok) { const r = await api(`/appointments/${b.dataset.ok}/confirm`, 'POST', { doctor_id: $('#as' + b.dataset.ok).value }); toast(r.emailed ? `Confirmed. Ticket #${r.queue_no}. Email sent.` : `Confirmed. Ticket #${r.queue_no}. Email NOT sent: ${r.note}`, 6000); }
-      if (b.dataset.no) await api(`/appointments/${b.dataset.no}/status`, 'POST', { status: 'cancelled' });
+      if (b.dataset.no) { const r = await api(`/appointments/${b.dataset.no}/status`, 'POST', { status: 'cancelled' }); toast(r.emailed ? 'Appointment cancelled. Cancellation email sent to patient.' : 'Appointment cancelled.' + (r.note ? ' Email not sent: ' + r.note : ''), 6000); }
     } catch (x) { toast(x.message, 7000); }
     requests();
   });
@@ -891,14 +914,13 @@ function docForm(d) {
   const box = $('#docFormBox');
   box.innerHTML = `<form id="docForm" class="card inner"><h3>${edit ? 'Edit ' + esc(d.name) : 'Add a doctor'}</h3>
     <div class="cols"><label>Full name<input name="name" required maxlength="120" value="${esc(d ? d.name : '')}" placeholder="Dr. Juan Dela Cruz"></label><label>Room<input name="room" required maxlength="30" value="${esc(d ? d.room : '')}" placeholder="Clinic 6A"></label></div>
-    <div class="cols"><label>Department<select name="dept_id" required>${depts.map(x => `<option value="${x.id}" ${d && x.id === d.dept_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label><label>Email (the password link is sent here)<input name="email" type="email" maxlength="190" value="${esc(d ? d.email || '' : '')}"></label></div>
+    <div class="cols"><label>Department<select name="dept_id" required>${depts.map(x => `<option value="${x.id}" ${d && x.id === d.dept_id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label><label>Email (optional)<input name="email" type="email" maxlength="190" value="${esc(d ? d.email || '' : '')}" placeholder="Optional"></label></div>
     <fieldset class="fs"><legend>Working days</legend><div class="chk-row">${DAY_NAMES.map((n, i) => `<label><input type="checkbox" name="day" value="${i}" ${days.has(i) ? 'checked' : ''}> ${n}</label>`).join('')}</div></fieldset>
     <div class="cols"><label>Hours<select name="preset"><option value="full">Full day (7 AM to 5 PM)</option><option value="am">Morning (7 AM to 12 PM)</option><option value="pm">Afternoon (12 PM to 5 PM)</option><option value="custom">Custom hours</option></select></label>
       <div class="cols ${preset === 'custom' ? '' : 'hidden'}" id="customHrs"><label>From<select name="start_hour">${hrs(7, 16, d && d.start_hour != null ? d.start_hour : 8)}</select></label><label>To<select name="end_hour">${hrs(8, 17, d && d.end_hour != null ? d.end_hour : 12)}</select></label></div></div>
     ${edit ? '<p class="muted small">If the new schedule leaves booked patients without a doctor, you will be asked to confirm and they will be moved or emailed.</p>'
-      : `<div class="cols"><label>Initial password (8+ characters)<input type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Optional: set login password now"></label><label>Confirm password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Re-enter password"></label></div>
-         <p class="muted small">Set an initial password so the doctor can sign in right away, or leave blank to email a setup link instead.</p>
-         <label class="check"><input type="checkbox" name="send_invite" checked> Email a password setup link if no initial password is set (needs an email)</label>`}
+      : `<div class="cols"><label>Password (8+ characters)<input type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" required placeholder="Set doctor's login password"></label><label>Confirm password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required placeholder="Re-enter password"></label></div>
+         <p class="muted small">The doctor will sign in using their assigned Doctor ID and this password (no email required).</p>`}
     <div class="row"><button class="btn g">${edit ? 'Save changes' : 'Add doctor'}</button><button type="button" class="btn o dark" data-close="1">Cancel</button></div><p class="msg" role="status"></p></form>`;
   const f = $('#docForm'), m = $('.msg', f); f.preset.value = preset;
   if (!edit) addPwToggles(f);
@@ -906,18 +928,15 @@ function docForm(d) {
   f.querySelector('[data-close]').onclick = () => { box.innerHTML = ''; };
   f.onsubmit = e => {
     e.preventDefault();
-    if (!edit && f.password.value && f.password.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The passwords do not match.'; f.confirm.focus(); return; }
+    if (!edit && f.password.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The passwords do not match.'; f.confirm.focus(); return; }
     busy(submitBtn(f), async () => {
       m.className = 'msg'; m.textContent = '';
       const body = { name: f.name.value.trim(), room: f.room.value.trim(), dept_id: +f.dept_id.value, email: f.email.value.trim(), days: [...f.querySelectorAll('[name=day]:checked')].map(x => +x.value) };
       if (f.preset.value === 'custom') { body.start_hour = +f.start_hour.value; body.end_hour = +f.end_hour.value; } else { body.shift = f.preset.value; body.start_hour = null; body.end_hour = null; }
-      if (!edit) {
-        body.send_invite = f.send_invite.checked;
-        if (f.password.value) { body.password = f.password.value; body.confirm = f.confirm.value; }
-      }
+      if (!edit) { body.password = f.password.value; body.confirm = f.confirm.value; }
       try {
         const r = await withConfirm(x => api(edit ? `/admin/doctors/${d.id}` : '/admin/doctors', edit ? 'PUT' : 'POST', { ...body, ...x }));
-        toast(edit ? 'Saved.' + moveNote(r) : `Doctor added. Doctor ID: ${r.doctor_code}.` + (r.has_password ? ' Initial password set — ready to sign in.' : r.invite ? (r.invite.ok ? ' Password link emailed.' : ' Password link not sent: ' + r.invite.note) : ' Add an email and send the password link so they can sign in.'), 9000);
+        toast(edit ? 'Saved.' + moveNote(r) : `Doctor added. Doctor ID: ${r.doctor_code}. Password set — ready to sign in.`, 9000);
         box.innerHTML = ''; await refreshDoctorsCache(); loadDocList();
       } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
     });
@@ -928,12 +947,22 @@ async function leaveTab() {
   const box = $('#al');
   if (!box.dataset.ready) {
     box.dataset.ready = '1';
-    box.innerHTML = `<form id="lvForm" class="card"><h3>Record a doctor's leave or absence</h3><div class="cols"><label>Doctor<select name="doctor" required>${doctors.map(d => `<option value="${d.id}">${esc(d.name)} - ${esc(d.dept)}</option>`).join('')}</select></label><label>Date<input type="date" name="date" min="${today()}" value="${today()}" required></label></div>
-      <label>Reason<input name="reason" maxlength="200" placeholder="e.g. sick leave, conference"></label><button class="btn g">Mark absent and reassign patients</button><p class="msg" role="status"></p></form><div id="lvList"></div>`;
-    $('#lvForm').onsubmit = e => { e.preventDefault(); const f = e.target, m = $('.msg', f);
+    box.innerHTML = `<form id="lvForm" class="card"><h3>Record a doctor's leave or absence</h3><label>Doctor<select name="doctor" required>${doctors.map(d => `<option value="${d.id}">${esc(d.name)} - ${esc(d.dept)}</option>`).join('')}</select></label>
+      <div class="cols"><label>Start date<input type="date" name="start_date" min="${today()}" value="${today()}" required></label><label>End date (1 to 5 days max)<input type="date" name="end_date" min="${today()}" value="${today()}" required></label></div>
+      <label>Reason (required)<input name="reason" maxlength="200" placeholder="e.g. sick leave, conference" required></label><button type="submit" class="btn g">Mark absent and reassign patients</button><p class="msg" role="status"></p></form><div id="lvList"></div>`;
+    const lf = $('#lvForm');
+    const syncLv = () => {
+      const s = lf.start_date.value || today(), mx = DB.iso(DB.addDays(4, new Date(s + 'T00:00:00')));
+      lf.end_date.min = s; lf.end_date.max = mx;
+      if (!lf.end_date.value || lf.end_date.value < s) lf.end_date.value = s; else if (lf.end_date.value > mx) lf.end_date.value = mx;
+    };
+    syncLv(); lf.start_date.onchange = syncLv;
+    lf.onsubmit = e => { e.preventDefault(); const f = e.target, m = $('.msg', f);
+      m.className = 'msg'; m.textContent = '';
+      const v = Object.fromEntries(new FormData(f));
+      if (!v.reason.trim()) { m.className = 'msg err'; m.textContent = 'Please enter a reason for the leave.'; f.reason.focus(); return; }
       busy(submitBtn(f), async () => {
-        m.className = 'msg'; const v = Object.fromEntries(new FormData(f));
-        try { const r = await api(`/doctors/${v.doctor}/leave`, 'POST', { date: v.date, reason: v.reason }); m.className = 'msg ok'; m.textContent = `Recorded. ${r.total} appointment(s) affected: ${r.moved} moved to another doctor, ${r.unassigned} need rescheduling (patients were emailed).`; leaveTab(); }
+        try { const r = await api(`/doctors/${v.doctor}/leave`, 'POST', { start_date: v.start_date, end_date: v.end_date, reason: v.reason.trim() }); m.className = 'msg ok'; m.textContent = `Recorded (${r.days} day${r.days > 1 ? 's' : ''}). ${r.total} appointment(s) affected: ${r.moved} moved to another doctor, ${r.unassigned} need rescheduling (patients were emailed).`; f.reason.value = ''; leaveTab(); }
         catch (x) { m.className = 'msg err'; m.textContent = x.message; }
       }); };
     $('#lvList').onclick = e => { const b = e.target.closest('[data-rm]'); if (b && confirm('Remove this leave? Patients that were already moved are not moved back.')) busy(b, async () => { await api('/leave/' + b.dataset.rm, 'DELETE'); leaveTab(); }); };
@@ -986,5 +1015,36 @@ async function emails() {
   let l; try { l = await api('/emails'); } catch (x) { $('#ae').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; return; }
   $('#ae').innerHTML = legend(LG_MAIL, 'Email status colors') + (l.map(m => `<div class="card"><b>${esc(m.subject)}</b> <span class="tag ${m.delivered ? 'available' : 'pending'}">${m.delivered ? 'sent to patient' : 'not sent'}</span> <small class="muted">${esc(m.note || '')}</small><br><small class="muted">To ${esc(m.to_addr)} &middot; ${m.sent_at}</small><pre style="white-space:pre-wrap;font:inherit">${esc(m.body)}</pre></div>`).join('')) || '<p class="muted">No emails yet.</p>';
 }
-const tabLoad = { dq: docQueue, df: () => loadFac('#df', true, true), dr: patientList, ar: requests, am: monitor, af: () => loadFac('#af', true, false), aa: forecast, ad: doctorsTab, al: leaveTab, au: auditTab, ae: emails };
+async function adminsTab() {
+  const box = $('#ac');
+  if (!box.dataset.ready) {
+    box.dataset.ready = '1';
+    box.innerHTML = `<form id="admForm" class="card"><h3>Create administrator account</h3>
+      <div class="cols"><label>Full name<input name="name" maxlength="120" required placeholder="e.g. Maria Santos"></label><label>Username<input name="username" minlength="3" maxlength="40" required placeholder="e.g. admin.maria" autocapitalize="off" spellcheck="false"></label></div>
+      <label>Email (optional)<input name="email" type="email" maxlength="190" placeholder="Optional"></label>
+      <div class="cols"><label>Password (8+ characters)<input type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" required></label><label>Confirm password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label></div>
+      <button type="submit" class="btn g">Create admin account</button><p class="msg" role="status"></p></form><div id="admList"></div>`;
+    const f = $('#admForm'), m = $('.msg', f);
+    addPwToggles(f);
+    f.onsubmit = e => {
+      e.preventDefault(); m.className = 'msg'; m.textContent = '';
+      if (f.password.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The passwords do not match.'; f.confirm.focus(); return; }
+      busy(submitBtn(f), async () => {
+        try {
+          const v = Object.fromEntries(new FormData(f));
+          const r = await api('/admin/admins', 'POST', v);
+          f.reset(); m.className = 'msg ok'; m.textContent = `Admin account "${r.username}" created.`;
+          toast(`Admin "${r.username}" created.`); adminsTab();
+        } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
+      });
+    };
+  }
+  loading($('#admList'), 'Loading administrator accounts...');
+  try {
+    const l = await api('/admin/admins');
+    $('#admList').innerHTML = `<h3>Existing administrators</h3><div class="scroll"><table><tr><th>Username</th><th>Full name</th><th>Email</th><th>Status</th><th>Last login</th></tr>` +
+      (l.map(a => `<tr><td><b>${esc(a.username)}</b></td><td>${esc(a.name)}</td><td>${esc(a.email || '-')}</td><td>${a.active === 0 ? '<span class="tag cancelled">Inactive</span>' : '<span class="tag available">Active</span>'}</td><td>${esc(a.last_login || 'Never')}</td></tr>`).join('') || '<tr><td colspan="5"><div class="empty">No admin accounts found.</div></td></tr>') + '</table></div>';
+  } catch (x) { $('#admList').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
+}
+const tabLoad = { dq: docQueue, df: () => loadFac('#df', true, true), dr: patientList, ar: requests, am: monitor, af: () => loadFac('#af', true, false), aa: forecast, ad: doctorsTab, al: leaveTab, au: auditTab, ae: emails, ac: adminsTab };
 init();

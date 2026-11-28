@@ -152,7 +152,7 @@
       <label>New password<input type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" required></label>
       <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label>
       <p class="muted small">At least 8 characters. Avoid common passwords and your own name or email.</p>
-      <button class="btn g">Save new password</button><p class="msg" role="status"></p>
+      <button type="submit" class="btn g">Save new password</button><p class="msg" role="status"></p>
     </form>
   </div>
 </section>
@@ -165,7 +165,7 @@
     <label>Current password<input type="password" name="currentPassword" autocomplete="current-password" required></label>
     <label>New password<input type="password" name="newPassword" minlength="8" maxlength="72" autocomplete="new-password" required></label>
     <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label>
-    <button class="btn g">Update password</button><p class="msg" role="status"></p>
+    <button type="submit" class="btn g">Update password</button><p class="msg" role="status"></p>
   </form>
 </section>
 
@@ -188,9 +188,10 @@
 <template id="tpl-doctor"><section id="doctor" class="view">
   <div class="bar"><h2 id="docName"></h2></div>
   <details class="card" id="absence"><summary>Report my absence or leave</summary>
-    <form id="absForm"><div class="cols"><label>Date<input type="date" name="date" required></label><label>Reason<input name="reason" maxlength="200" placeholder="e.g. sick leave"></label></div>
-      <button class="btn r">Report absence</button><p class="msg" role="status"></p>
-      <p class="muted">Your booked patients are moved to another doctor in your department when possible, and emailed.</p></form></details>
+    <form id="absForm"><div class="cols"><label>Start date<input type="date" name="start_date" required></label><label>End date (1 to 5 days max)<input type="date" name="end_date" required></label></div>
+      <label>Reason (required)<input name="reason" maxlength="200" placeholder="e.g. sick leave, medical conference" required></label>
+      <button type="submit" class="btn r">File leave</button><p class="msg" role="status"></p>
+      <p class="muted small">You can file leave for 1 to 5 days only (today or future dates). Your booked patients are moved to another doctor in your department when possible, and emailed.</p></form></details>
   <div class="tabs"><button data-t="dq" class="on">Queue &amp; appointments</button><button data-t="df">Facility checker</button><button data-t="dr">Patient records</button></div>
   <div id="dq" class="tab"></div>
   <div id="df" class="tab hidden"></div>
@@ -212,6 +213,7 @@
     <button data-t="al"><b>Doctor leave</b><small>Absences &amp; reassignments</small></button>
     <button data-t="au"><b>Audit log</b><small>Staff &amp; record activity</small></button>
     <button data-t="ae"><b>Email outbox</b><small>Sent notices &amp; resends</small></button>
+    <button data-t="ac"><b>Admin accounts</b><small>Create &amp; view admins</small></button>
   </div>
   <div id="ar" class="tab"></div><div id="am" class="tab hidden"></div><div id="af" class="tab hidden"></div>
   <div id="aa" class="tab hidden">
@@ -219,7 +221,7 @@
       <p id="fInfo" class="muted"></p><div id="fChart" class="chart"></div><div class="xl" id="fAx"></div><p id="fPeaks"></p></div>
   </div>
   <div id="ad" class="tab hidden"></div><div id="al" class="tab hidden"></div><div id="au" class="tab hidden"></div>
-  <div id="ae" class="tab hidden"></div>
+  <div id="ae" class="tab hidden"></div><div id="ac" class="tab hidden"></div>
 </section></template>
 <footer>KonsulTap &middot; IT 314 Group 12 &middot; Batangas State University &middot; Demo system, not for real clinical use &middot; <a href="#/privacy">Privacy Notice</a></footer>
 <div id="toast" role="status"></div>

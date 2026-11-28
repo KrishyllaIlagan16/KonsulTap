@@ -149,7 +149,7 @@ const ALLOWED_FROM = { serving: ['confirmed'], done: ['serving'], confirmed: ['s
 router.post('/appointments/:id/status', requireRole('doctor', 'admin'), wrap(async (req, res) => {
   const id = Number(req.params.id), raw = (req.body || {}).status, status = raw === 'completed' ? 'done' : raw;   // "completed" is accepted as another name for "done"
   if (!ALLOWED_FROM[status]) throw new HttpError(400, 'Invalid status.');
-  const docId = await tx(async c => {
+  const appt = await tx(async c => {
     const [[a]] = await c.query('SELECT * FROM appointments WHERE id = ? FOR UPDATE', [id]);
     if (!a) throw new HttpError(404, 'Appointment not found.');
     if (req.user.role === 'doctor' && a.doctor_id !== req.user.ref_id) throw new HttpError(403, 'Access denied: this is not your patient.');
@@ -157,12 +157,21 @@ router.post('/appointments/:id/status', requireRole('doctor', 'admin'), wrap(asy
     if (status === 'serving') await c.query("UPDATE appointments SET status = 'done', completed_at = NOW() WHERE doctor_id = ? AND appt_date = ? AND status = 'serving'", [a.doctor_id, a.appt_date]); // one patient at a time
     if (status === 'cancelled' || status === 'no_show') await c.query('UPDATE appointments SET status = ?, cancelled_by = ? WHERE id = ?', [status, req.user.role, id]);
     else await c.query(`UPDATE appointments SET status = ?, started_at = IF(? = 'serving', NOW(), IF(? = 'confirmed', NULL, started_at)), completed_at = IF(? = 'done', NOW(), completed_at) WHERE id = ?`, [status, status, status, status, id]);   // the database is updated here; start/end times feed the wait-time estimates
-    return a.doctor_id;
+    return a;
   });
   await audit(req, 'status_' + status, 'appointment', id);
   if (status === 'done') refreshWaitStats();   // visit lengths changed: use them in the next estimate
-  if (docId) notifyQueue([docId], status);   // push to every open screen right away: the next patient becomes "Next" / "Now serving"
-  res.json({ ok: true });
+  if (appt.doctor_id) notifyQueue([appt.doctor_id], status);   // push to every open screen right away: the next patient becomes "Next" / "Now serving"
+  let emailed = null, note = null;
+  if (status === 'cancelled' && appt.email) {
+    const [dept] = await q('SELECT name FROM departments WHERE id = ?', [appt.dept_id]);
+    const deptName = dept ? dept.name : 'Outpatient Department';
+    const body = `Dear ${appt.patient_name},\n\nWe regret to inform you that your consultation appointment (${appt.ref}) for ${deptName} on ${appt.appt_date} at ${appt.appt_time} has been cancelled by the hospital.\n\nPlease log in to KonsulTap if you would like to book a new schedule.\n\nThank you,\nKonsulTap`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #d7e0d9;border-radius:10px;overflow:hidden"><div style="background:#0d6b3f;color:#fff;padding:18px 22px;border-bottom:4px solid #f2d900"><h2 style="margin:0;font-size:19px">Appointment Cancelled</h2></div><div style="padding:20px 22px;color:#15251c;line-height:1.55"><p>Dear <b>${appt.patient_name}</b>,</p><p>Your consultation appointment has been cancelled by the hospital:</p><ul style="background:#f4f7f3;padding:12px 18px 12px 32px;border-radius:8px"><li><b>Reference Code:</b> ${appt.ref}</li><li><b>Department:</b> ${deptName}</li><li><b>Schedule:</b> ${appt.appt_date} at ${appt.appt_time}</li></ul><p>Please visit KonsulTap to book a new consultation slot at your convenience.</p></div></div>`;
+    const m = await sendMail({ to: appt.email, subject: `KonsulTap: Appointment Cancelled (${appt.ref})`, body, html, kind: 'cancellation', appointmentId: id });
+    emailed = m.ok; note = m.note;
+  }
+  res.json({ ok: true, emailed, note });
 }));
 
 module.exports = router;

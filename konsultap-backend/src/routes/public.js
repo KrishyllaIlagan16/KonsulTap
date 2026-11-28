@@ -24,11 +24,14 @@ router.get('/doctors', wrap(async (req, res) => {
   let sql = 'SELECT d.id, d.name, d.dept_id, d.room, d.days, d.shift, d.start_hour, d.end_hour, p.name AS dept FROM doctors d JOIN departments p ON p.id = d.dept_id WHERE d.on_duty = 1';
   if (dept) { sql += ' AND d.dept_id = ?'; params.push(Number(dept)); }
   let docs = (await q(sql + ' ORDER BY d.id', params)).map(d => ({ ...d, days: String(d.days).split(',').map(Number) }));
-  if (date && time) {
-    if (!isDate(date) || !isTime(time)) throw new HttpError(400, 'Invalid date or time.');
-    docs = docs.filter(d => works(d, date, +time.slice(0, 2)));
+  if (date) {
+    if (!isDate(date)) throw new HttpError(400, 'Invalid date.');
     const off = await onLeaveSet(date);
     docs = docs.filter(d => !off.has(d.id));
+  }
+  if (date && time) {
+    if (!isTime(time)) throw new HttpError(400, 'Invalid time.');
+    docs = docs.filter(d => works(d, date, +time.slice(0, 2)));
     if (docs.length) {
       const rows = await q(`SELECT COALESCE(doctor_id, pref_doctor_id) AS did, COUNT(*) AS n FROM appointments
         WHERE appt_date = ? AND appt_time = ? AND status NOT IN ('cancelled','no_show') AND id <> ? AND COALESCE(doctor_id, pref_doctor_id) IN (?)
