@@ -157,16 +157,39 @@
   </div>
 </section>
 
-<!-- CHANGE PASSWORD (signed-in users) -->
+<!-- CHANGE PASSWORD (signed-in patients) -->
 <section id="password" class="view hidden">
   <form id="fChangePw" class="card narrow">
     <h2>Change password</h2>
-    <p class="muted small">Enter your current password, then choose a new password (8+ characters).</p>
+    <p class="muted small">Enter your current password, then choose a new password (at least 8 characters; avoid common words or your own name/email).</p>
     <label>Current password<input type="password" name="currentPassword" autocomplete="current-password" required></label>
     <label>New password<input type="password" name="newPassword" minlength="8" maxlength="72" autocomplete="new-password" required></label>
     <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label>
     <button type="submit" class="btn g">Update password</button><p class="msg" role="status"></p>
   </form>
+</section>
+
+<!-- DOCTOR PROFILE & PASSWORD (opened by clicking the doctor's name in the navbar) -->
+<section id="docprofile" class="view hidden">
+  <div class="bar"><h2>Doctor profile</h2><button type="button" class="btn sm o dark" data-view="doctor">Back to My clinic</button></div>
+  <div class="two">
+    <form id="fDocProfile" class="card">
+      <h3>Profile details</h3>
+      <p id="docProfMeta" class="muted small"></p>
+      <label>Specialization<input name="specialization" maxlength="120" placeholder="e.g. Cardiology, General Pediatrics"></label>
+      <label>Contact number<input name="contact" maxlength="40" inputmode="tel" placeholder="e.g. 0917-123-4567"></label>
+      <label>Email (optional)<input name="email" type="email" maxlength="190" placeholder="Optional"></label>
+      <button type="submit" class="btn g">Save profile</button><p class="msg" role="status"></p>
+    </form>
+    <form id="fDocChangePw" class="card">
+      <h3>Change password</h3>
+      <p class="muted small">Optional: update your login password (at least 8 characters; avoid common words or your name).</p>
+      <label>Current password<input type="password" name="currentPassword" autocomplete="current-password" required></label>
+      <label>New password<input type="password" name="newPassword" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+      <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+      <button type="submit" class="btn g">Update password</button><p class="msg" role="status"></p>
+    </form>
+  </div>
 </section>
 
 <!-- PRIVACY NOTICE -->

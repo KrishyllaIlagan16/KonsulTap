@@ -14,6 +14,8 @@ const hasCol = async (t, c) => (await q('SELECT COUNT(*) AS n FROM information_s
     if (!(await hasCol('appointments', 'checked_in_at'))) await pool.query('ALTER TABLE appointments ADD COLUMN checked_in_at TIMESTAMP NULL DEFAULT NULL');
     for (const c of ['started_at', 'completed_at']) if (!(await hasCol('appointments', c))) await pool.query(`ALTER TABLE appointments ADD COLUMN ${c} TIMESTAMP NULL DEFAULT NULL`);
     for (const c of ['start_hour', 'end_hour']) if (!(await hasCol('doctors', c))) await pool.query(`ALTER TABLE doctors ADD COLUMN ${c} TINYINT NULL`);
+    for (const [c, ddl] of [['contact', 'VARCHAR(40) NULL'], ['specialization', 'VARCHAR(120) NULL']])
+      if (!(await hasCol('doctors', c))) await pool.query(`ALTER TABLE doctors ADD COLUMN ${c} ${ddl}`);
     if (!(await hasCol('users', 'active'))) await pool.query('ALTER TABLE users ADD COLUMN active TINYINT(1) NOT NULL DEFAULT 1');
     for (const [c, ddl] of [['blood_type', 'VARCHAR(3) NULL'], ['address', 'VARCHAR(255) NULL'], ['emergency_name', 'VARCHAR(120) NULL'], ['emergency_phone', 'VARCHAR(40) NULL'], ['family_history', 'TEXT NULL'], ['social_history', 'TEXT NULL'], ['updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP']])
       if (!(await hasCol('patients', c))) await pool.query(`ALTER TABLE patients ADD COLUMN ${c} ${ddl}`);

@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS doctors (
   shift ENUM('am','pm','full') NOT NULL,
   start_hour TINYINT NULL COMMENT 'custom hours override the shift: first bookable hour (7-16)',
   end_hour TINYINT NULL COMMENT 'custom hours: end (exclusive, 8-17)',
+  contact VARCHAR(40) NULL,
+  specialization VARCHAR(120) NULL,
   on_duty TINYINT(1) NOT NULL DEFAULT 1,
   KEY idx_doctors_dept (dept_id)
 ) DEFAULT CHARSET=utf8mb4;

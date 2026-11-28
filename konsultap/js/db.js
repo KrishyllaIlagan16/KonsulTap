@@ -38,5 +38,5 @@ const DB = (() => {
     return data;
   }
 
-  return { ready: async () => {}, api, hasToken: () => Boolean(token), today, iso, addDays };
+  return { ready: async () => {}, api, hasToken: () => Boolean(token), clearToken: () => setToken(null), today, iso, addDays };
 })();

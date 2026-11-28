@@ -284,3 +284,16 @@ button,a,input,select,textarea{touch-action:manipulation}
 @keyframes ktLoad{from{width:0}to{width:100%}}
 @media (max-width:600px){.brand img{height:34px}.admin-nav{grid-template-columns:repeat(2,1fr);gap:.5rem}.admin-nav button{padding:.65rem .75rem}}
 @media print{.splash{display:none!important}}
+
+/* ---- final alignment polish & clickable doctor profile pill ---- */
+nav{align-items:center}
+.who{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap}
+.who-btn{border:1.5px solid var(--line);background:#f4f8f5;border-radius:99px;padding:.38rem .75rem;color:var(--ink);font-weight:600;cursor:pointer}
+.who-btn:hover,.who-btn.on{border-color:var(--g);background:var(--g);color:#fff}
+.who-btn:hover small,.who-btn.on small{background:var(--y);color:var(--gd)}
+.bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem;margin:1rem 0 .85rem}
+.bar h2{margin:0}
+.card h2,.card h3{margin:0 0 .7rem}
+.row{align-items:flex-end}
+.row>.btn:not(.sm){align-self:flex-end}
+@media (max-width:480px){.who-btn{display:inline-flex!important;font-size:.86rem;padding:.35rem .65rem}}

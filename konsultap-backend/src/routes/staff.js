@@ -91,4 +91,37 @@ router.post('/emails/:id/resend', requireRole('admin'), wrap(async (req, res) =>
   res.json({ ok: r.ok, note: r.note });
 }));
 
+// ---------- DOCTOR PROFILE (contact, specialization, email) ----------
+let docColsReady = false;
+async function ensureDoctorProfileCols() {
+  if (docColsReady) return;
+  for (const [col, ddl] of [['contact', 'VARCHAR(40) NULL'], ['specialization', 'VARCHAR(120) NULL']]) {
+    const [r] = await q('SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', ['doctors', col]);
+    if (!r || !r.n) await q(`ALTER TABLE doctors ADD COLUMN ${col} ${ddl}`);
+  }
+  docColsReady = true;
+}
+
+router.get('/doctor/profile', requireRole('doctor'), wrap(async (req, res) => {
+  await ensureDoctorProfileCols();
+  const [d] = await q(`SELECT d.id, d.name, d.room, d.contact, d.specialization, p.name AS dept, u.username, u.email
+    FROM doctors d JOIN departments p ON p.id = d.dept_id LEFT JOIN users u ON u.role = 'doctor' AND u.ref_id = d.id
+    WHERE d.id = ?`, [req.user.ref_id]);
+  if (!d) throw new HttpError(404, 'Doctor profile not found.');
+  res.json({ ...d, doctor_code: d.username ? d.username.toUpperCase() : '' });
+}));
+
+router.put('/doctor/profile', requireRole('doctor'), wrap(async (req, res) => {
+  await ensureDoctorProfileCols();
+  const b = req.body || {};
+  const contact = clean(b.contact, 40) || null;
+  const specialization = clean(b.specialization, 120) || null;
+  const email = clean(b.email, 190).toLowerCase() || null;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Enter a valid email address.');
+  await q('UPDATE doctors SET contact = ?, specialization = ? WHERE id = ?', [contact, specialization, req.user.ref_id]);
+  await q("UPDATE users SET email = ? WHERE role = 'doctor' AND ref_id = ?", [email, req.user.ref_id]);
+  await audit(req, 'doctor_profile_update', 'doctor', req.user.ref_id);
+  res.json({ ok: true, contact, specialization, email });
+}));
+
 module.exports = router;

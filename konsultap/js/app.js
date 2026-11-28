@@ -15,7 +15,7 @@ const statusTag = st => `<span class="tag ${st}">${esc(String(st).replace('_', '
 const HOURS_ALL = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
 const hoursFor = d => HOURS_ALL.filter(h => d !== today() || h > new Date().getHours());
 const timeOpts = hs => hs.length ? hs.map(h => `<option value="${String(h).padStart(2, '0')}:00">${fmtH(h)}</option>`).join('') : '<option value="">No slots left</option>';
-const TITLES = { home: 'Home', queue: 'Live queue', login: 'Sign in', portal: 'Staff sign in', book: 'Book an appointment', doctor: 'My clinic', admin: 'Admin console', privacy: 'Privacy Notice', forgot: 'Reset your password', reset: 'Choose a new password', password: 'Change password' };
+const TITLES = { home: 'Home', queue: 'Live queue', login: 'Sign in', portal: 'Staff sign in', book: 'Book an appointment', doctor: 'My clinic', docprofile: 'Doctor profile', admin: 'Admin console', privacy: 'Privacy Notice', forgot: 'Reset your password', reset: 'Choose a new password', password: 'Change password' };
 const fmtH = h => { const n = h % 12 || 12; return n + (h < 12 ? ' AM' : ' PM'); };
 const slot = t => { const [h] = t.split(':').map(Number); return fmtH(h); };
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
@@ -31,7 +31,7 @@ let depts = [], doctors = [], timer = null, view = 'home', openPatient = null;
 
 /* ---------- routing + role-based access control ---------- */
 let ME = null, meLoaded = false;
-const ROUTES = { home: null, queue: null, privacy: null, forgot: null, reset: null, login: 'guest', portal: 'guest', book: ['patient'], doctor: ['doctor'], admin: ['admin'], password: ['patient', 'doctor'] };
+const ROUTES = { home: null, queue: null, privacy: null, forgot: null, reset: null, login: 'guest', portal: 'guest', book: ['patient'], doctor: ['doctor'], docprofile: ['doctor'], admin: ['admin'], password: ['patient'] };
 const go = r => { location.hash = '#/' + r; };
 const homeFor = u => (u && (u.role === 'doctor' || u.role === 'admin')) ? u.role : 'home';
 /* Staff (doctor/admin) sign in is on an unlisted route that is never linked from public pages. */
@@ -40,9 +40,12 @@ const loginFor = r => isStaff(r) ? 'portal/staff-login/' + r : 'login/patient';
 function renderNav() {
   const L = !ME ? [['home', 'Home'], ['queue', 'Live queue'], ['login/patient', 'Sign in']]
     : ME.role === 'patient' ? [['home', 'Home'], ['book', 'Book'], ['queue', 'Live queue'], ['password', 'Password']]
-    : ME.role === 'doctor' ? [['doctor', 'My clinic'], ['queue', 'Live queue'], ['password', 'Password']] : [['admin', 'Admin console'], ['queue', 'Live queue']];
+    : ME.role === 'doctor' ? [['doctor', 'My clinic'], ['queue', 'Live queue']] : [['admin', 'Admin console'], ['queue', 'Live queue']];
+  const who = !ME ? ''
+    : ME.role === 'doctor' ? `<button type="button" class="who who-btn ${view === 'docprofile' ? 'on' : ''}" data-view="docprofile" title="Edit profile &amp; password">${esc(ME.name)} <small>${ME.role}</small></button>`
+    : `<span class="who">${esc(ME.name)} <small>${ME.role}</small></span>`;
   $('#nav').innerHTML = L.map(([r, t]) => `<button data-view="${r}" class="${r.split('/')[0] === view ? 'on' : ''}">${t}</button>`).join('') +
-    (ME ? `<span class="who">${esc(ME.name)} <small>${ME.role}</small></span><button id="logoutBtn" class="out">Log out</button>` : '');
+    (ME ? `${who}<button id="logoutBtn" class="out">Log out</button>` : '');
 }
 async function route() {
   const parts = location.hash.replace('#', '').split('/'), name = parts[1] || 'home';
@@ -54,12 +57,16 @@ async function route() {
   let v = Object.hasOwn(ROUTES, name) ? name : 'home';
   if (v === 'portal' && parts[2] !== 'staff-login') v = 'home';            // only the exact staff URL works
   const rule = ROUTES[v], sub = v === 'portal' ? parts[3] : parts[2];
+  // Signed-in doctors and admins stay locked on their own portal (prevents browser Back from jumping to patient pages)
+  if (ME && isStaff(ME.role) && ['home', 'book', 'login', 'portal'].includes(v)) {
+    const dest = homeFor(ME);
+    history.pushState(null, '', '#/' + dest);
+    return show(dest);
+  }
   if ((v === 'login' || v === 'portal') && ME) { history.replaceState(null, '', '#/' + homeFor(ME)); return show(homeFor(ME)); }
-  // Signed-in doctors and admins stay on their own portal (prevents browser Back from landing on patient Home/Book)
-  if (ME && isStaff(ME.role) && ['home', 'book'].includes(v)) { history.replaceState(null, '', '#/' + homeFor(ME)); return show(homeFor(ME)); }
   if (Array.isArray(rule) && !(ME && rule.includes(ME.role))) {
     if (!ME) {
-      if (v === 'book') { sessionStorage.next = v; toast('Please sign in to continue.'); return go('login/patient'); }
+      if (v === 'book' || v === 'password') { sessionStorage.next = v; toast('Please sign in to continue.'); return go('login/patient'); }
       return go('home');                                                    // staff pages: never reveal where the staff login is
     }
     toast(`Access denied: ${ME.role} accounts cannot open that page.`); history.replaceState(null, '', '#/' + homeFor(ME)); return show(homeFor(ME));
@@ -68,7 +75,7 @@ async function route() {
 }
 function show(v, sub) {
   view = v; clearTimeout(timer); $('#dyn').innerHTML = '';
-  ['home', 'login', 'portal', 'book', 'queue', 'privacy', 'forgot', 'reset', 'password'].forEach(id => $('#' + id).classList.toggle('hidden', id !== v));
+  ['home', 'login', 'portal', 'book', 'queue', 'privacy', 'forgot', 'reset', 'password', 'docprofile'].forEach(id => $('#' + id).classList.toggle('hidden', id !== v));
   renderNav(); document.title = `${TITLES[v]} | KonsulTap`;
   if (['home', 'queue'].includes(v)) pollQueue();
   if (v === 'home' && !$('#hChart').innerHTML) setTimeout(() => { if (view === 'home') drawForecast('h'); }, 150);
@@ -77,6 +84,8 @@ function show(v, sub) {
   if (v === 'forgot') openForgot(sub);
   if (v === 'reset') openReset(sub);
   if (v === 'book') openBook();
+  if (v === 'password') { $('#fChangePw').reset(); $('#fChangePw .msg').textContent = ''; }
+  if (v === 'docprofile') openDocProfile();
   if (v === 'doctor') mountDoctor();
   if (v === 'admin') mountAdmin();
   window.scrollTo(0, 0);
@@ -84,8 +93,16 @@ function show(v, sub) {
 }
 window.addEventListener('hashchange', route);
 document.addEventListener('click', async e => {
+  const brand = e.target.closest('a.brand');
+  if (brand && ME && isStaff(ME.role)) { e.preventDefault(); go(homeFor(ME)); return; }
   const b = e.target.closest('[data-view]'); if (b) { e.preventDefault(); go(b.dataset.view); }
-  if (e.target.id === 'logoutBtn') { ME = null; meLoaded = true; myIds = new Set(); api('/logout', 'POST').catch(() => {}); location.hash = '#/home'; route(); }
+  if (e.target.id === 'logoutBtn') {
+    const prevRole = ME && ME.role;
+    ME = null; meLoaded = true; myIds = new Set(); DB.clearToken();
+    api('/logout', 'POST').catch(() => {});
+    const dest = isStaff(prevRole) ? loginFor(prevRole) : 'home';
+    history.replaceState(null, '', '#/' + dest); route();
+  }
   const c = e.target.closest('[data-copy]'); if (c) navigator.clipboard?.writeText(c.dataset.copy).then(() => toast('Reference code copied.')).catch(() => toast('Could not copy. Please select the code and copy it.'));
   if (e.target.closest('[data-print]')) window.print();
 });
@@ -269,15 +286,45 @@ $('#fReset').onsubmit = e => {
   });
 };
 
-$('#fChangePw').onsubmit = e => {
-  e.preventDefault(); const f = e.target, m = $('.msg', f);
-  if (f.newPassword.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The new passwords do not match.'; f.confirm.focus(); return; }
-  busy(submitBtn(f), async () => {
+function bindChangePasswordForm(form) {
+  if (!form) return;
+  form.onsubmit = e => {
+    e.preventDefault(); const f = e.target, m = $('.msg', f);
     m.className = 'msg'; m.textContent = '';
+    if (f.newPassword.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The new passwords do not match.'; f.confirm.focus(); return; }
+    busy(submitBtn(f), async () => {
+      try {
+        const r = await api('/password/change', 'POST', { currentPassword: f.currentPassword.value, newPassword: f.newPassword.value, confirm: f.confirm.value });
+        f.reset(); m.className = 'msg ok'; m.textContent = r.message || 'Your password has been updated.';
+        toast('Password updated.');
+      } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
+    });
+  };
+}
+bindChangePasswordForm($('#fChangePw'));
+bindChangePasswordForm($('#fDocChangePw'));
+
+async function openDocProfile() {
+  const f = $('#fDocProfile'), m = $('.msg', f), meta = $('#docProfMeta');
+  m.className = 'msg'; m.textContent = '';
+  $('#fDocChangePw').reset(); $('#fDocChangePw .msg').textContent = '';
+  meta.textContent = 'Loading profile...';
+  try {
+    const p = await api('/doctor/profile');
+    meta.textContent = `${p.name} · ID ${p.doctor_code} · ${p.dept} (${p.room})`;
+    f.specialization.value = p.specialization || '';
+    f.contact.value = p.contact || '';
+    f.email.value = p.email || '';
+  } catch (x) { meta.textContent = ''; m.className = 'msg err'; m.textContent = x.message; }
+}
+$('#fDocProfile').onsubmit = e => {
+  e.preventDefault(); const f = e.target, m = $('.msg', f);
+  m.className = 'msg'; m.textContent = '';
+  busy(submitBtn(f), async () => {
     try {
-      const r = await api('/password/change', 'POST', { currentPassword: f.currentPassword.value, newPassword: f.newPassword.value, confirm: f.confirm.value });
-      f.reset(); m.className = 'msg ok'; m.textContent = r.message || 'Your password has been updated.';
-      toast('Password updated.');
+      await api('/doctor/profile', 'PUT', { specialization: f.specialization.value.trim(), contact: f.contact.value.trim(), email: f.email.value.trim() });
+      m.className = 'msg ok'; m.textContent = 'Profile saved.';
+      toast('Doctor profile updated.');
     } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
   });
 };
