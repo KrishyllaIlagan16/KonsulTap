@@ -115,9 +115,10 @@ router.put('/doctor/profile', requireRole('doctor'), wrap(async (req, res) => {
   await ensureDoctorProfileCols();
   const b = req.body || {};
   const contact = clean(b.contact, 40) || null;
-  const specialization = clean(b.specialization, 120) || null;
-  const email = clean(b.email, 190).toLowerCase() || null;
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Enter a valid email address.');
+  const specialization = clean(b.specialization, 120);
+  const email = clean(b.email, 190).toLowerCase();
+  if (!specialization) throw new HttpError(400, 'Please select a specialization.');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Enter a valid email address.');
   await q('UPDATE doctors SET contact = ?, specialization = ? WHERE id = ?', [contact, specialization, req.user.ref_id]);
   await q("UPDATE users SET email = ? WHERE role = 'doctor' AND ref_id = ?", [email, req.user.ref_id]);
   await audit(req, 'doctor_profile_update', 'doctor', req.user.ref_id);

@@ -49,6 +49,32 @@ router.post('/register', limiter, wrap(async (req, res) => {
 router.post('/logout', (req, res) => res.json({ ok: true })); // tokens are stateless: the client just discards its token
 router.get('/me', (req, res) => res.json(pub(req.user)));
 
+// Unlisted staff portal: create a new administrator account before signing in.
+router.post('/admin/register', limiter, wrap(async (req, res) => {
+  const b = req.body || {};
+  const name = clean(b.name, 120), username = clean(b.username, 40).toLowerCase(), email = clean(b.email, 190).toLowerCase();
+  const password = String(b.password || '');
+  if (name.length < 2 || !/^[a-z0-9._-]{3,40}$/.test(username)) {
+    throw new HttpError(400, 'Enter a full name and username (3–40 letters, numbers, dots, hyphens or underscores).');
+  }
+  if (email && !isValidEmail(email)) throw new HttpError(400, 'Enter a valid email address.');
+  if (typeof b.confirm === 'string' && b.confirm !== password) throw new HttpError(400, 'The passwords do not match.');
+  const pwProblem = checkPassword(password, { username, email, name });
+  if (pwProblem) throw new HttpError(400, pwProblem);
+
+  const [dupUser] = await q('SELECT id FROM users WHERE LOWER(username) = ? LIMIT 1', [username]);
+  if (dupUser) throw new HttpError(409, 'That username is already taken.');
+  if (email) {
+    const [dupEmail] = await q('SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1', [email]);
+    if (dupEmail) throw new HttpError(409, 'This email is already registered.');
+  }
+  const hash = await bcrypt.hash(password, 10);
+  const r = await q("INSERT INTO users (role, username, name, email, password_hash) VALUES ('admin',?,?,?,?)", [username, name, email || null, hash]);
+  const [u] = await q('SELECT * FROM users WHERE id = ?', [r.insertId]);
+  await audit(req, 'admin_register', 'user', u.id, username, u);
+  res.status(201).json(session(u));
+}));
+
 // ---- Google sign-in (patients only) ----
 router.get('/auth/nonce', (req, res) => {
   const nonce = crypto.randomBytes(16).toString('hex');

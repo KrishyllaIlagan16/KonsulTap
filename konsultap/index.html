@@ -126,10 +126,21 @@
     </form>
     <form id="fAdmin" class="login hidden" data-role="admin" data-portal="admin">
       <p class="muted">Hospital administration only.</p>
-      <label>Username<input name="username" autocomplete="username" required></label>
-      <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
-      <button class="btn g">Sign in as administrator</button><p class="msg" role="status"></p>
+      <label>Username<input name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
+      <label>Password<input name="password" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+      <button type="submit" class="btn g">Sign in as administrator</button><p class="msg" role="status"></p>
+      <p class="muted">New administrator? <a href="#/portal/staff-login/admin-register">Create an admin account</a></p>
       <p class="muted small"><a href="#/forgot/admin">Forgot your password?</a></p>
+    </form>
+    <form id="fAdminRegister" class="hidden" data-portal="admin-register">
+      <p class="muted">Create a new hospital administrator account.</p>
+      <label>Full name<input name="name" autocomplete="name" maxlength="120" required></label>
+      <label>Username<input name="username" minlength="3" maxlength="40" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="e.g. admin.maria" required></label>
+      <label>Email (optional)<input name="email" type="email" autocomplete="email" maxlength="190" placeholder="Optional"></label>
+      <label>Password (8+ characters)<input name="password" type="password" minlength="8" maxlength="72" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+      <label>Confirm password<input name="confirm" type="password" minlength="8" maxlength="72" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+      <button type="submit" class="btn g">Create admin account</button><p class="msg" role="status"></p>
+      <p class="muted">Already have an admin account? <a href="#/portal/staff-login/admin">Sign in</a></p>
     </form>
   </div>
 </section>
@@ -159,12 +170,12 @@
 
 <!-- CHANGE PASSWORD (signed-in patients) -->
 <section id="password" class="view hidden">
-  <form id="fChangePw" class="card narrow">
+  <form id="fChangePw" class="card narrow" novalidate>
     <h2>Change password</h2>
     <p class="muted small">Enter your current password, then choose a new password (at least 8 characters; avoid common words or your own name/email).</p>
-    <label>Current password<input type="password" name="currentPassword" autocomplete="current-password" required></label>
-    <label>New password<input type="password" name="newPassword" minlength="8" maxlength="72" autocomplete="new-password" required></label>
-    <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+    <label>Current password<input type="password" name="currentPassword" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+    <label>New password<input type="password" name="newPassword" minlength="8" maxlength="72" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+    <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
     <button type="submit" class="btn g">Update password</button><p class="msg" role="status"></p>
   </form>
 </section>
@@ -176,17 +187,37 @@
     <form id="fDocProfile" class="card">
       <h3>Profile details</h3>
       <p id="docProfMeta" class="muted small"></p>
-      <label>Specialization<input name="specialization" maxlength="120" placeholder="e.g. Cardiology, General Pediatrics"></label>
-      <label>Contact number<input name="contact" maxlength="40" inputmode="tel" placeholder="e.g. 0917-123-4567"></label>
-      <label>Email (optional)<input name="email" type="email" maxlength="190" placeholder="Optional"></label>
+      <label>Specialization<select name="specialization" required>
+        <option value="">Select specialization</option>
+        <option>Anesthesiology</option>
+        <option>Cardiology</option>
+        <option>Dermatology</option>
+        <option>Emergency Medicine</option>
+        <option>ENT (Otolaryngology)</option>
+        <option>Family Medicine</option>
+        <option>General Surgery</option>
+        <option>Internal Medicine</option>
+        <option>Laboratory Medicine / Pathology</option>
+        <option>Neurology</option>
+        <option>OB-GYN</option>
+        <option>Ophthalmology</option>
+        <option>Orthopedics</option>
+        <option>Pediatrics</option>
+        <option>Psychiatry</option>
+        <option>Pulmonology</option>
+        <option>Radiology</option>
+        <option>Urology</option>
+      </select></label>
+      <label>Email<input name="email" type="email" maxlength="190" required placeholder="doctor@example.com"></label>
+      <label>Contact number (optional)<input name="contact" maxlength="40" inputmode="tel" placeholder="Optional (e.g. 0917-123-4567)"></label>
       <button type="submit" class="btn g">Save profile</button><p class="msg" role="status"></p>
     </form>
-    <form id="fDocChangePw" class="card">
+    <form id="fDocChangePw" class="card" novalidate>
       <h3>Change password</h3>
       <p class="muted small">Optional: update your login password (at least 8 characters; avoid common words or your name).</p>
-      <label>Current password<input type="password" name="currentPassword" autocomplete="current-password" required></label>
-      <label>New password<input type="password" name="newPassword" minlength="8" maxlength="72" autocomplete="new-password" required></label>
-      <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+      <label>Current password<input type="password" name="currentPassword" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+      <label>New password<input type="password" name="newPassword" minlength="8" maxlength="72" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
+      <label>Confirm new password<input type="password" name="confirm" minlength="8" maxlength="72" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" required></label>
       <button type="submit" class="btn g">Update password</button><p class="msg" role="status"></p>
     </form>
   </div>

@@ -32,7 +32,7 @@ const DB = (() => {
     }
     if (p === '/reset') throw new Error('Reset is only available in the browser-only demo. Use "npm run seed -- --force" on the server.');
     const data = await call(u, method, body);
-    if (['/login', '/register', '/auth/google'].includes(p) && data.token) { setToken(data.token); return { user: data.user }; }
+    if (['/login', '/register', '/admin/register', '/auth/google'].includes(p) && data.token) { setToken(data.token); return { user: data.user }; }
     if (p === '/password/change' && data.token) setToken(data.token);
     if (p === '/logout') setToken(null);
     return data;

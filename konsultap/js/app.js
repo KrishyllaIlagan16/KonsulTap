@@ -127,11 +127,24 @@ function showPortal(p) {
   if (p === 'patient') initGoogle();
 }
 function showStaff(p) {
-  p = p === 'admin' ? 'admin' : 'doctor';
+  p = ['admin', 'admin-register'].includes(p) ? p : 'doctor';
+  const tab = p === 'doctor' ? 'doctor' : 'admin';
   $$('#portal form').forEach(f => f.classList.toggle('hidden', f.dataset.portal !== p));
-  $$('#staffTabs button').forEach(b => { b.classList.toggle('on', b.dataset.p === p); b.setAttribute('aria-pressed', String(b.dataset.p === p)); });
+  $$('#staffTabs button').forEach(b => { b.classList.toggle('on', b.dataset.p === tab); b.setAttribute('aria-pressed', String(b.dataset.p === tab)); });
 }
 $('#staffTabs').onclick = e => { const b = e.target.closest('button'); if (b) go('portal/staff-login/' + b.dataset.p); };
+$('#fAdminRegister').onsubmit = e => {
+  e.preventDefault(); const f = e.target, m = $('.msg', f);
+  m.className = 'msg'; m.textContent = '';
+  if (f.password.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The passwords do not match.'; f.confirm.focus(); return; }
+  busy(submitBtn(f), async () => {
+    try {
+      const v = Object.fromEntries(new FormData(f));
+      const r = await api('/admin/register', 'POST', v);
+      f.reset(); afterLogin(r);
+    } catch (x) { m.className = 'msg err'; m.textContent = x.message; toast(x.message, 6000); }
+  });
+};
 async function afterLogin(r) {
   ME = r.user; meLoaded = true;
   if (ME.role === 'patient') api('/my/appointments').then(l => { myIds = new Set(l.map(a => a.id)); }).catch(() => {}); else myIds = new Set();
@@ -290,14 +303,19 @@ function bindChangePasswordForm(form) {
   if (!form) return;
   form.onsubmit = e => {
     e.preventDefault(); const f = e.target, m = $('.msg', f);
+    const fail = (txt, el) => { m.className = 'msg err'; m.textContent = txt; toast(txt, 6000); m.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); el?.focus(); };
     m.className = 'msg'; m.textContent = '';
-    if (f.newPassword.value !== f.confirm.value) { m.className = 'msg err'; m.textContent = 'The new passwords do not match.'; f.confirm.focus(); return; }
+    const cur = f.currentPassword.value, nw = f.newPassword.value, cfm = f.confirm.value;
+    if (!cur) return fail('Enter your current password.', f.currentPassword);
+    if (nw.length < 8) return fail('New password must be at least 8 characters.', f.newPassword);
+    if (nw !== cfm) return fail('The new passwords do not match.', f.confirm);
     busy(submitBtn(f), async () => {
       try {
-        const r = await api('/password/change', 'POST', { currentPassword: f.currentPassword.value, newPassword: f.newPassword.value, confirm: f.confirm.value });
+        const r = await api('/password/change', 'POST', { currentPassword: cur, newPassword: nw, confirm: cfm });
         f.reset(); m.className = 'msg ok'; m.textContent = r.message || 'Your password has been updated.';
-        toast('Password updated.');
-      } catch (x) { m.className = 'msg err'; m.textContent = x.message; }
+        toast('Password updated successfully!');
+        m.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } catch (x) { fail(x.message); }
     });
   };
 }
@@ -312,6 +330,9 @@ async function openDocProfile() {
   try {
     const p = await api('/doctor/profile');
     meta.textContent = `${p.name} · ID ${p.doctor_code} · ${p.dept} (${p.room})`;
+    if (p.specialization && ![...f.specialization.options].some(o => o.value === p.specialization)) {
+      const opt = document.createElement('option'); opt.value = opt.textContent = p.specialization; f.specialization.append(opt);
+    }
     f.specialization.value = p.specialization || '';
     f.contact.value = p.contact || '';
     f.email.value = p.email || '';
