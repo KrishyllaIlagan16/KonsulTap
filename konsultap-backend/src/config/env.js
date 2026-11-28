@@ -7,7 +7,10 @@ if (missing.length) { console.error('Missing environment variables:', missing.jo
 if (process.env.JWT_SECRET.length < 32) { console.error('JWT_SECRET must be at least 32 characters.'); process.exit(1); }
 
 const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
-const publicUrl = process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || (vercelUrl ? 'https://' + vercelUrl : '');
+const envAppUrl = (process.env.APP_URL || '').trim();
+// On Vercel, ignore an accidentally copied "http://localhost:3000" APP_URL and use the real Vercel HTTPS URL instead
+const usableAppUrl = process.env.VERCEL && /^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(envAppUrl) ? '' : envAppUrl;
+const publicUrl = usableAppUrl || process.env.RENDER_EXTERNAL_URL || (vercelUrl ? 'https://' + vercelUrl : '');
 if (process.env.NODE_ENV === 'production' && !publicUrl) { console.error('APP_URL is required in production (the public address of the website, used in password-reset links).'); process.exit(1); }
 
 module.exports = {

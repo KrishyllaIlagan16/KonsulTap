@@ -38,7 +38,9 @@ router.post('/password/forgot', forgotLimiter, wrap(async (req, res) => {
   }
 
   const token = await createToken(u.id, resetTokenMinutes, req.ip);
-  const mail = passwordResetEmail({ name: u.name, link: `${appUrl}/#/reset/${token}`, minutes: resetTokenMinutes });
+  const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+  const baseUrl = process.env.VERCEL && /^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(appUrl) && host ? `https://${host}` : appUrl;
+  const mail = passwordResetEmail({ name: u.name, link: `${baseUrl}/#/reset/${token}`, minutes: resetTokenMinutes });
   const sent = await sendMail({ to: u.email, subject: mail.subject, body: mail.text, html: mail.html, kind: 'password_reset', sensitive: true });
   await audit(req, 'password_reset_requested', 'user', u.id, null, null);
 

@@ -38,7 +38,9 @@ async function sendInvite(docId, req) {
   }
   if (!u.email || !EMAIL_RE.test(u.email)) throw new HttpError(400, 'Add an email address for this doctor first.');
   const token = await createToken(u.id, inviteTokenHours * 60, req.ip);
-  const m = doctorInviteEmail({ name: u.name, doctorId: u.username.toUpperCase(), link: `${appUrl}/#/reset/${token}`, hours: inviteTokenHours });
+  const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+  const baseUrl = process.env.VERCEL && /^https?:\/\/(localhost|127\.0\.0\.1)\b/i.test(appUrl) && host ? `https://${host}` : appUrl;
+  const m = doctorInviteEmail({ name: u.name, doctorId: u.username.toUpperCase(), link: `${baseUrl}/#/reset/${token}`, hours: inviteTokenHours });
   const r = await sendMail({ to: u.email, subject: m.subject, body: m.text, html: m.html, kind: 'invite', sensitive: true });
   await audit(req, 'doctor_invite', 'doctor', docId, u.email);
   return { ok: r.ok, note: r.note };
