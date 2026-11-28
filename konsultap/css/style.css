@@ -249,25 +249,38 @@ button,a,input,select,textarea{touch-action:manipulation}
   .fac-search{max-width:none;width:100%}
 }
 
-/* ---- KonsulTap branding (portal header, print slip) & animated intro splash screen ---- */
-.portal-brand{display:flex;align-items:center;justify-content:center;gap:.55rem;margin-bottom:.7rem;font:800 1.35rem 'Bricolage Grotesque',sans-serif;color:var(--gd)}
-.portal-brand img{width:38px;height:38px}
-.slip-title{display:flex;align-items:center;gap:.5rem}
-.slip-logo{width:28px;height:28px;flex:none}
+/* ---- KonsulTap branding (navbar, portal header, print slip), admin action cards, & animated splash screen ---- */
+.brand img{height:42px;width:auto;display:block}
+.portal-brand{display:flex;align-items:center;justify-content:center;margin-bottom:.85rem}
+.portal-brand img{height:48px;width:auto;max-width:220px;object-fit:contain}
+.slip-title{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.slip-logo{height:34px;width:auto;flex:none}
 
-.splash{position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:radial-gradient(circle at 50% 40%,#0d6b3f 0%,#063a24 72%);color:#fff;transition:opacity .45s ease,visibility .45s ease}
+/* Instant tactile press feedback across all interactive controls */
+.btn,nav button,.dept,.admin-nav button{transition:transform .08s ease,background-color .14s ease,border-color .14s ease,box-shadow .14s ease}
+.btn:active,nav button:active,.dept:active,.admin-nav button:active{transform:scale(.97)}
+
+/* Admin Dashboard: distinct clickable action cards (all 8 functions including Email outbox) */
+.admin-nav{display:grid!important;grid-template-columns:repeat(auto-fill,minmax(min(185px,100%),1fr));gap:.65rem;border-bottom:0;margin:0 0 1.25rem;padding:0;overflow:visible!important;flex-wrap:wrap!important}
+.admin-nav button{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:.2rem;text-align:left;padding:.8rem .95rem;background:var(--card);border:1.5px solid var(--line);border-bottom:3px solid var(--line);border-radius:12px;color:var(--ink);white-space:normal!important;box-shadow:0 1px 2px rgba(6,58,36,.05)}
+.admin-nav button b{font:700 .96rem 'Bricolage Grotesque',sans-serif;line-height:1.2}
+.admin-nav button small{font-size:.78rem;color:var(--mut);font-weight:400;line-height:1.25}
+.admin-nav button:hover{border-color:var(--g);box-shadow:0 4px 12px rgba(13,107,63,.12);transform:translateY(-1px)}
+.admin-nav button.on{background:var(--g);border-color:var(--gd);border-bottom-color:var(--y);color:#fff;box-shadow:0 4px 14px rgba(13,107,63,.22)}
+.admin-nav button.on small{color:rgba(255,255,255,.85)}
+
+/* Animated Intro Splash Screen (light surface so dark KonsulTAP wordmark & green K pop cleanly) */
+.splash{position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:radial-gradient(circle at 50% 42%,#ffffff 0%,#e9f4ec 78%);transition:opacity .45s ease,visibility .45s ease}
 .splash.out{opacity:0;visibility:hidden;pointer-events:none}
-.splash-inner{display:flex;flex-direction:column;align-items:center;text-align:center;padding:1.5rem}
-.splash-logo-wrap{position:relative;width:104px;height:104px;display:grid;place-items:center;margin-bottom:1rem}
-.splash-logo{width:88px;height:88px;animation:ktPop .65s cubic-bezier(.22,1,.36,1) both;filter:drop-shadow(0 10px 24px rgba(0,0,0,.35))}
-.splash-ring{position:absolute;inset:0;border-radius:30px;border:3px solid var(--y);opacity:0;animation:ktPulse 1.35s ease-out infinite}
-.splash-brand{font:800 2.2rem 'Bricolage Grotesque',sans-serif;letter-spacing:-.02em;animation:ktFadeUp .55s .15s ease both}
-.splash-brand span{color:var(--y)}
-.splash-sub{margin:.25rem 0 1.1rem;font-size:.95rem;opacity:.85;animation:ktFadeUp .55s .25s ease both}
-.splash-bar{width:170px;height:5px;border-radius:99px;background:rgba(255,255,255,.2);overflow:hidden;animation:ktFadeUp .5s .3s ease both}
-.splash-bar i{display:block;height:100%;width:0;border-radius:99px;background:var(--y);animation:ktLoad .95s ease-in-out forwards}
-@keyframes ktPop{from{opacity:0;transform:scale(.68) rotate(-8deg)}to{opacity:1;transform:scale(1) rotate(0)}}
-@keyframes ktPulse{0%{transform:scale(.88);opacity:.7}100%{transform:scale(1.22);opacity:0}}
-@keyframes ktFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.splash-inner{display:flex;flex-direction:column;align-items:center;text-align:center;padding:1.5rem;max-width:340px;width:100%}
+.splash-logo-wrap{position:relative;padding:1.1rem 1.4rem;border-radius:20px;background:#fff;box-shadow:0 14px 36px rgba(6,58,36,.12);border:1px solid var(--line);margin-bottom:1.2rem;animation:ktPop .6s cubic-bezier(.22,1,.36,1) both}
+.splash-logo{width:min(240px,68vw);height:auto;display:block}
+.splash-ring{position:absolute;inset:-6px;border-radius:24px;border:3px solid var(--g);opacity:0;animation:ktPulse 1.3s ease-out infinite}
+.splash-bar{width:190px;height:5px;border-radius:99px;background:#d7e5db;overflow:hidden;animation:ktFadeUp .45s .15s ease both}
+.splash-bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--g),#22a05e);animation:ktLoad .9s ease-in-out forwards}
+@keyframes ktPop{from{opacity:0;transform:scale(.82) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes ktPulse{0%{transform:scale(.96);opacity:.45}100%{transform:scale(1.09);opacity:0}}
+@keyframes ktFadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes ktLoad{from{width:0}to{width:100%}}
+@media (max-width:600px){.brand img{height:34px}.admin-nav{grid-template-columns:repeat(2,1fr);gap:.5rem}.admin-nav button{padding:.65rem .75rem}}
 @media print{.splash{display:none!important}}

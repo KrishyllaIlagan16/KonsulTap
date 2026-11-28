@@ -30,7 +30,7 @@ const LG_MAIL = [['available', 'Email sent to patient'], ['pending', 'Not sent (
 let depts = [], doctors = [], timer = null, view = 'home', openPatient = null;
 
 /* ---------- routing + role-based access control ---------- */
-let ME = null;
+let ME = null, meLoaded = false;
 const ROUTES = { home: null, queue: null, privacy: null, forgot: null, reset: null, login: 'guest', portal: 'guest', book: ['patient'], doctor: ['doctor'], admin: ['admin'], password: ['patient', 'doctor'] };
 const go = r => { location.hash = '#/' + r; };
 const homeFor = u => (u && (u.role === 'doctor' || u.role === 'admin')) ? u.role : 'home';
@@ -46,8 +46,11 @@ function renderNav() {
 }
 async function route() {
   const parts = location.hash.replace('#', '').split('/'), name = parts[1] || 'home';
-  ME = await api('/me');
-  if (ME && ME.role === 'patient') api('/my/appointments').then(l => { myIds = new Set(l.map(a => a.id)); }).catch(() => {}); else myIds = new Set();   // lets us alert a patient when it is their turn
+  if (!meLoaded) {
+    ME = DB.hasToken() ? await api('/me').catch(() => null) : null;
+    meLoaded = true;
+    if (ME && ME.role === 'patient') api('/my/appointments').then(l => { myIds = new Set(l.map(a => a.id)); }).catch(() => {}); else myIds = new Set();
+  }
   let v = Object.hasOwn(ROUTES, name) ? name : 'home';
   if (v === 'portal' && parts[2] !== 'staff-login') v = 'home';            // only the exact staff URL works
   const rule = ROUTES[v], sub = v === 'portal' ? parts[3] : parts[2];
@@ -80,11 +83,11 @@ function show(v, sub) {
 window.addEventListener('hashchange', route);
 document.addEventListener('click', async e => {
   const b = e.target.closest('[data-view]'); if (b) { e.preventDefault(); go(b.dataset.view); }
-  if (e.target.id === 'logoutBtn') { await api('/logout', 'POST'); location.hash = '#/home'; route(); }
+  if (e.target.id === 'logoutBtn') { ME = null; meLoaded = true; myIds = new Set(); api('/logout', 'POST').catch(() => {}); location.hash = '#/home'; route(); }
   const c = e.target.closest('[data-copy]'); if (c) navigator.clipboard?.writeText(c.dataset.copy).then(() => toast('Reference code copied.')).catch(() => toast('Could not copy. Please select the code and copy it.'));
   if (e.target.closest('[data-print]')) window.print();
 });
-window.addEventListener('kt-session-expired', () => { const r = ME && ME.role; ME = null; toast('Your session expired. Please sign in again.', 7000); location.hash = '#/' + loginFor(r); route(); });
+window.addEventListener('kt-session-expired', () => { const r = ME && ME.role; ME = null; meLoaded = true; myIds = new Set(); toast('Your session expired. Please sign in again.', 7000); location.hash = '#/' + loginFor(r); route(); });
 function bindTabs(root) {
   $$('.tabs', root).forEach(t => {
     t.setAttribute('role', 'tablist');
@@ -111,6 +114,8 @@ function showStaff(p) {
 }
 $('#staffTabs').onclick = e => { const b = e.target.closest('button'); if (b) go('portal/staff-login/' + b.dataset.p); };
 async function afterLogin(r) {
+  ME = r.user; meLoaded = true;
+  if (ME.role === 'patient') api('/my/appointments').then(l => { myIds = new Set(l.map(a => a.id)); }).catch(() => {}); else myIds = new Set();
   toast('Welcome, ' + r.user.name); const nx = sessionStorage.next; delete sessionStorage.next;
   go(r.user.role === 'patient' ? (nx === 'book' ? 'book' : 'home') : r.user.role); route();
 }
@@ -451,15 +456,29 @@ function hideSplash() {
   const delay = reduced ? 0 : 950;
   setTimeout(() => { s.classList.add('out'); setTimeout(() => s.remove(), 450); }, delay);
 }
+function renderCatalog() {
+  $('#deptGrid').innerHTML = depts.map(d => `<button class="dept" data-dept="${d.id}"><img src="img/depts/${d.icon}" alt="" loading="lazy">${esc(d.name)}</button>`).join('');
+  const prevB = $('#bDept').value, prevQ = $('#qDept').value;
+  $('#bDept').innerHTML = depts.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+  $('#qDept').innerHTML = '<option value="">Choose a department</option>' + depts.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+  if (prevB) $('#bDept').value = prevB; if (prevQ) $('#qDept').value = prevQ;
+}
 async function init() {
   hideSplash();
   await DB.ready();
-  [depts, doctors] = await Promise.all([api('/departments'), api('/doctors')]);
-  $('#deptGrid').innerHTML = depts.map(d => `<button class="dept" data-dept="${d.id}"><img src="img/depts/${d.icon}" alt="">${esc(d.name)}</button>`).join('');
-  $('#bDept').innerHTML = depts.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
-  $('#qDept').innerHTML = '<option value="">Choose a department</option>' + depts.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
   $('#bDate').min = $('#bDate').value = today(); $('#hDate').value = DB.iso(DB.addDays(1));
   $('#qLegend').innerHTML = legend(LG_QUEUE); $('#statusLegend').innerHTML = legend(LG_STATUS, 'Status colors');
+  // Instant first paint from session cache if available, then refresh in background
+  try {
+    const cd = JSON.parse(sessionStorage.kt_depts || 'null'), cdoc = JSON.parse(sessionStorage.kt_docs || 'null');
+    if (Array.isArray(cd) && cd.length && Array.isArray(cdoc)) { depts = cd; doctors = cdoc; renderCatalog(); }
+  } catch {}
+  const loadCatalog = Promise.all([api('/departments'), api('/doctors')]).then(([dp, dc]) => {
+    depts = dp; doctors = dc;
+    try { sessionStorage.kt_depts = JSON.stringify(dp); sessionStorage.kt_docs = JSON.stringify(dc); } catch {}
+    renderCatalog();
+  });
+  if (!depts.length) await loadCatalog;
   buildTimes(); loadDocs(); startLive(); setInterval(() => { if (['home', 'queue'].includes(view)) renderQueue(); else if (view === 'book') loadMine(); }, 30000); await route();
 }
 function buildTimes() {
@@ -499,7 +518,7 @@ function showBooked(r, v) {
   $('#bookDone').innerHTML = `<div class="done-card" role="status">
     <h3 class="no-print">Booking received</h3>
     <div class="print-slip">
-      <div class="slip-title"><img src="img/konsultap-logo.svg" alt="KonsulTap" class="slip-logo"><span>KonsulTap Appointment Slip</span></div>
+      <div class="slip-title"><img src="img/Konsultap.png" alt="KonsulTap" class="slip-logo"><span>Appointment Slip</span></div>
       <dl class="slip-grid">
         <dt>Reference Code</dt><dd class="refcode">${esc(r.ref)}</dd>
         <dt>Department</dt><dd>${esc(deptLabel)}</dd>

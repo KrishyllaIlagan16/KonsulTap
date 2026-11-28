@@ -11,11 +11,15 @@ const realtime = require('../utils/realtime');
 
 const trackLimiter = rateLimit({ windowMs: 60e3, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many lookups. Please wait a minute.' } });
 
-router.get('/departments', wrap(async (req, res) => res.json(await q('SELECT id, name, icon FROM departments ORDER BY id'))));
+router.get('/departments', wrap(async (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+  res.json(await q('SELECT id, name, icon FROM departments ORDER BY id'));
+}));
 
 // Doctors of a department. With ?date=&time= only doctors who work then and still have room (max 3 patients per hour).
 router.get('/doctors', wrap(async (req, res) => {
   const { dept, date, time } = req.query, except = Number(req.query.except) || 0;
+  if (!date && !time) res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
   const params = [];
   let sql = 'SELECT d.id, d.name, d.dept_id, d.room, d.days, d.shift, d.start_hour, d.end_hour, p.name AS dept FROM doctors d JOIN departments p ON p.id = d.dept_id WHERE d.on_duty = 1';
   if (dept) { sql += ' AND d.dept_id = ?'; params.push(Number(dept)); }

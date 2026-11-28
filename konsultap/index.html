@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KonsulTap | Online Hospital Queue</title>
-<link rel="icon" type="image/svg+xml" href="img/konsultap-logo.svg">
+<link rel="icon" type="image/png" href="img/Konsultap.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Public+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
@@ -15,16 +15,14 @@
   <div class="splash-inner">
     <div class="splash-logo-wrap">
       <span class="splash-ring"></span>
-      <img src="img/konsultap-logo.svg" alt="KonsulTap" class="splash-logo">
+      <img src="img/Konsultap.png" alt="KonsulTap" class="splash-logo">
     </div>
-    <div class="splash-brand">Konsul<span>Tap</span></div>
-    <p class="splash-sub">Online Hospital Queue System</p>
     <div class="splash-bar"><i></i></div>
   </div>
 </div>
 <a class="skip" href="#main">Skip to main content</a>
 <header class="top">
-  <a class="brand" href="#/home"><img src="img/konsultap-logo.svg" alt="KonsulTap logo"><span>KonsulTap</span></a>
+  <a class="brand" href="#/home" aria-label="KonsulTap Home"><img src="img/Konsultap.png" alt="KonsulTap"></a>
   <nav id="nav" aria-label="Main"></nav>
 </header>
 <main id="main">
@@ -89,7 +87,7 @@
 <!-- PATIENT SIGN IN / SIGN UP (public). Staff sign in lives at the unlisted #/portal/staff-login route. -->
 <section id="login" class="view hidden">
   <div class="card narrow portal">
-    <div class="portal-brand"><img src="img/konsultap-logo.svg" alt="KonsulTap logo"><span>KonsulTap</span></div>
+    <div class="portal-brand"><img src="img/Konsultap.png" alt="KonsulTap"></div>
     <h2 id="loginTitle">Patient sign in</h2>
     <form id="fPatient" class="login" data-role="patient" data-portal="patient">
       <label>Email<input name="username" type="email" autocomplete="username" required></label>
@@ -116,7 +114,7 @@
 <!-- STAFF SIGN IN (unlisted: #/portal/staff-login, #/portal/staff-login/admin). Not linked anywhere in the public UI. -->
 <section id="portal" class="view hidden">
   <div class="card narrow portal">
-    <div class="portal-brand"><img src="img/konsultap-logo.svg" alt="KonsulTap logo"><span>KonsulTap</span></div>
+    <div class="portal-brand"><img src="img/Konsultap.png" alt="KonsulTap"></div>
     <h2>Staff sign in</h2>
     <div class="tabs" id="staffTabs"><button type="button" data-p="doctor">Doctor</button><button type="button" data-p="admin">Administrator</button></div>
     <form id="fDoctor" class="login" data-role="doctor" data-portal="doctor">
@@ -205,7 +203,16 @@
 </section></template>
 <template id="tpl-admin"><section id="admin" class="view">
   <div class="bar"><h2>Admin console</h2></div>
-  <div class="tabs"><button data-t="ar" class="on">Requests</button><button data-t="am">Doctor queue monitor</button><button data-t="af">Facilities &amp; equipment</button><button data-t="aa">Peak-hour forecast</button><button data-t="ad">Doctors</button><button data-t="al">Doctor leave</button><button data-t="au">Audit log</button><button data-t="ae">Email outbox</button></div>
+  <div class="tabs admin-nav">
+    <button data-t="ar" class="on"><b>Requests</b><small>Approve &amp; assign bookings</small></button>
+    <button data-t="am"><b>Doctor queue monitor</b><small>Live clinic load &amp; waits</small></button>
+    <button data-t="af"><b>Facilities &amp; equipment</b><small>Beds &amp; clinic units</small></button>
+    <button data-t="aa"><b>Peak-hour forecast</b><small>Busy-hour predictions</small></button>
+    <button data-t="ad"><b>Doctors</b><small>Accounts &amp; schedules</small></button>
+    <button data-t="al"><b>Doctor leave</b><small>Absences &amp; reassignments</small></button>
+    <button data-t="au"><b>Audit log</b><small>Staff &amp; record activity</small></button>
+    <button data-t="ae"><b>Email outbox</b><small>Sent notices &amp; resends</small></button>
+  </div>
   <div id="ar" class="tab"></div><div id="am" class="tab hidden"></div><div id="af" class="tab hidden"></div>
   <div id="aa" class="tab hidden">
     <div class="card"><div class="row"><label>Forecast date<input type="date" id="fDate"></label><button class="btn g" id="fBtn">Run forecast</button></div>
